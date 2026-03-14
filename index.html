@@ -325,6 +325,60 @@
     .preview-table th { padding: 6px 10px; background: var(--zd-bg); border: 1px solid var(--zd-border); color: var(--zd-muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.4px; }
     .preview-table td { padding: 6px 10px; border: 1px solid var(--zd-border); color: var(--zd-text); }
     .col-required { color: var(--high-text); }
+
+    /* ── Notify button ── */
+    .btn-notify {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 11px; border-radius: 6px; font-size: 12px; font-weight: 500;
+      cursor: pointer; font-family: var(--font); transition: all 0.15s;
+      background: #FFF0EE; color: var(--high-text); border: 1px solid var(--high-border);
+      white-space: nowrap;
+    }
+    .btn-notify:hover { background: var(--high-text); color: #fff; }
+    .btn-notify:disabled { opacity: 0.38; cursor: not-allowed; background: var(--zd-bg); color: var(--zd-muted); border-color: var(--zd-border); }
+    .btn-notify-no-email {
+      font-size: 11px; color: var(--zd-muted); white-space: nowrap;
+      display: flex; align-items: center; gap: 4px;
+    }
+
+    /* ── Case Owners modal ── */
+    .owner-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .owner-row {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+      border: 1px solid var(--zd-border); border-radius: 8px; background: var(--zd-bg);
+      transition: border-color 0.15s;
+    }
+    .owner-row:hover { border-color: #b0b8be; }
+    .owner-avatar {
+      width: 32px; height: 32px; border-radius: 50%; background: var(--zd-accent);
+      color: #fff; font-size: 13px; font-weight: 600; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .owner-info { flex: 1; min-width: 0; }
+    .owner-name { font-size: 13.5px; font-weight: 500; color: var(--zd-text); }
+    .owner-email { font-size: 12px; color: var(--zd-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .owner-actions { display: flex; gap: 6px; }
+    .owner-action-btn {
+      width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--zd-border);
+      background: var(--zd-white); cursor: pointer; font-size: 13px;
+      display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+    }
+    .owner-action-btn:hover { border-color: #999; }
+    .owner-action-btn.del:hover { background: var(--high-text); border-color: var(--high-text); color: #fff; }
+
+    .add-owner-form {
+      border: 1px dashed var(--zd-border); border-radius: 8px; padding: 14px;
+      background: #FAFBFC; display: flex; flex-direction: column; gap: 10px;
+    }
+    .add-owner-form-title { font-size: 13px; font-weight: 600; color: var(--zd-text); margin-bottom: 2px; }
+    .owner-form-row { display: flex; gap: 10px; }
+    .owner-input {
+      flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--zd-border);
+      font-size: 13px; font-family: var(--font); outline: none; background: #fff;
+    }
+    .owner-input:focus { border-color: var(--zd-accent); }
+    .owner-empty { text-align: center; padding: 24px; color: var(--zd-muted); font-size: 13px; }
+    .owner-empty-icon { font-size: 28px; margin-bottom: 8px; }
   </style>
 </head>
 <body>
@@ -676,7 +730,7 @@
     // Keys shown in the main table columns (excluded from expand detail)
     const MAIN_COL_KEYS = new Set(['id', 'subject', 'priority', 'status', 'accountName', 'caseOwner', 'ageHours']);
 
-    function TicketTable({ cases, sortKey, sortDir, onSort, expandedId, onToggleExpand }) {
+    function TicketTable({ cases, sortKey, sortDir, onSort, expandedId, onToggleExpand, owners }) {
       const columns = [
         { key: 'id',          label: 'Case #',       width: 110 },
         { key: 'subject',     label: 'Subject',       width: null },
@@ -685,7 +739,14 @@
         { key: 'accountName', label: 'Account Name',  width: 150 },
         { key: 'caseOwner',   label: 'Case Owner',    width: 140 },
         { key: 'ageHours',    label: 'Age (Hrs)',     width: 90  },
+        { key: '_notify',     label: 'Notify',        width: 110, noSort: true },
       ];
+
+      // Look up owner email by name (case-insensitive)
+      function findOwner(name) {
+        if (!name) return null;
+        return owners.find(o => o.name.toLowerCase() === name.toLowerCase().trim()) || null;
+      }
 
       const COL_COUNT = columns.length;
 
@@ -696,11 +757,17 @@
               <thead>
                 <tr>
                   {columns.map(col => (
-                    <th key={col.key} style={col.width ? {width:col.width} : {}} onClick={() => onSort(col.key)}>
+                    <th
+                      key={col.key}
+                      style={col.width ? {width:col.width} : {}}
+                      onClick={() => !col.noSort && onSort(col.key)}
+                    >
                       {col.label}
-                      <span className="sort-icon">
-                        {sortKey === col.key ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
-                      </span>
+                      {!col.noSort && (
+                        <span className="sort-icon">
+                          {sortKey === col.key ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                        </span>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -745,6 +812,22 @@
                         <td style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.accountName || '—'}</td>
                         <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.caseOwner || '—'}</td>
                         <td className="cell-date">{c.ageHours || '—'}</td>
+                        <td onClick={e => e.stopPropagation()}>
+                          {(() => {
+                            const owner = findOwner(c.caseOwner);
+                            if (!c.caseOwner) return <span className="btn-notify-no-email">— no owner</span>;
+                            if (!owner)       return <span className="btn-notify-no-email" title={`"${c.caseOwner}" not in directory`}>⚠ not in directory</span>;
+                            return (
+                              <button
+                                className="btn-notify"
+                                onClick={() => sendNotification(c, owner.email, owner.name)}
+                                title={`Notify ${owner.name} (${owner.email})`}
+                              >
+                                ✉ Notify
+                              </button>
+                            );
+                          })()}
+                        </td>
                       </tr>
                       {isExpanded && (
                         <tr className="expand-row">
@@ -773,7 +856,172 @@
       );
     }
 
-    function Sidebar({ cases, filter, onFilter, onEditKeywords }) {
+    /* ── Email notification helper ── */
+    function sendNotification(c, ownerEmail, ownerName) {
+      const caseNum  = c.id      || 'N/A';
+      const subject  = c._subject || 'N/A';
+      const account  = c.accountName || 'N/A';
+      const status   = c.status  || 'N/A';
+      const priority = c.priority;
+      const age      = c.ageHours ? `${c.ageHours} hrs` : 'N/A';
+
+      const emailSubject = encodeURIComponent(
+        `[Action Required] Support Case ${caseNum} — Please Respond Within 1 Hour`
+      );
+      const body = encodeURIComponent(
+`Hi ${ownerName},
+
+This is an automated alert from CaseQueue. The following support case has been assigned to you and requires your immediate attention. Please take action within the next hour.
+
+─────────────────────────────────
+CASE DETAILS
+─────────────────────────────────
+Case Number : ${caseNum}
+Subject     : ${subject}
+Account     : ${account}
+Status      : ${status}
+Priority    : ${priority}
+Age         : ${age}
+─────────────────────────────────
+
+Please log in to your support system, review this case, and provide a response or update to the customer as soon as possible.
+
+If you are unable to handle this case within the hour, please escalate it to your team lead immediately.
+
+— CaseQueue Automated Notification`
+      );
+
+      window.location.href = `mailto:${ownerEmail}?subject=${emailSubject}&body=${body}`;
+    }
+
+    /* ── Case Owners Modal ── */
+    function CaseOwnersModal({ owners, onSave, onClose }) {
+      const [list, setList]           = useState(owners);
+      const [editIdx, setEditIdx]     = useState(null);
+      const [newName, setNewName]     = useState('');
+      const [newEmail, setNewEmail]   = useState('');
+      const [editName, setEditName]   = useState('');
+      const [editEmail, setEditEmail] = useState('');
+      const [error, setError]         = useState('');
+
+      function initials(name) {
+        return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+      }
+
+      function isValidEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim()); }
+
+      function handleAdd() {
+        if (!newName.trim())              { setError('Name is required.'); return; }
+        if (!isValidEmail(newEmail))      { setError('Enter a valid email address.'); return; }
+        if (list.some(o => o.email.toLowerCase() === newEmail.trim().toLowerCase())) {
+          setError('That email is already in the directory.'); return;
+        }
+        setList(l => [...l, { name: newName.trim(), email: newEmail.trim() }]);
+        setNewName(''); setNewEmail(''); setError('');
+      }
+
+      function startEdit(idx) {
+        setEditIdx(idx);
+        setEditName(list[idx].name);
+        setEditEmail(list[idx].email);
+        setError('');
+      }
+
+      function saveEdit() {
+        if (!editName.trim())            { setError('Name is required.'); return; }
+        if (!isValidEmail(editEmail))    { setError('Enter a valid email address.'); return; }
+        setList(l => l.map((o, i) => i === editIdx ? { name: editName.trim(), email: editEmail.trim() } : o));
+        setEditIdx(null); setError('');
+      }
+
+      function deleteOwner(idx) {
+        setList(l => l.filter((_, i) => i !== idx));
+        if (editIdx === idx) setEditIdx(null);
+      }
+
+      return (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+          <div className="modal-card" style={{maxWidth: 540}}>
+            <div className="modal-header">
+              <span className="modal-header-icon">👥</span>
+              <div>
+                <div className="modal-header-title">Case Owner Directory</div>
+                <div className="modal-header-sub">Manage names and emails used to send 1-hour action alerts</div>
+              </div>
+              <button className="modal-close" onClick={onClose}>×</button>
+            </div>
+            <div className="modal-body">
+              {error && (
+                <div style={{background:'var(--high-bg)',color:'var(--high-text)',border:'1px solid var(--high-border)',borderRadius:6,padding:'8px 12px',fontSize:13,marginBottom:12}}>
+                  {error}
+                </div>
+              )}
+
+              <div className="owner-list">
+                {list.length === 0 && (
+                  <div className="owner-empty">
+                    <div className="owner-empty-icon">👤</div>
+                    No owners yet — add one below
+                  </div>
+                )}
+                {list.map((owner, idx) => (
+                  <div key={idx} className="owner-row">
+                    {editIdx === idx ? (
+                      <>
+                        <input className="owner-input" value={editName}  onChange={e => setEditName(e.target.value)}  placeholder="Full name" />
+                        <input className="owner-input" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="Email address" type="email" />
+                        <button className="btn btn-primary" style={{padding:'6px 12px',fontSize:12}} onClick={saveEdit}>Save</button>
+                        <button className="btn btn-secondary" style={{padding:'6px 10px',fontSize:12}} onClick={() => setEditIdx(null)}>✕</button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="owner-avatar">{initials(owner.name)}</div>
+                        <div className="owner-info">
+                          <div className="owner-name">{owner.name}</div>
+                          <div className="owner-email">{owner.email}</div>
+                        </div>
+                        <div className="owner-actions">
+                          <button className="owner-action-btn" title="Edit" onClick={() => startEdit(idx)}>✏️</button>
+                          <button className="owner-action-btn del" title="Delete" onClick={() => deleteOwner(idx)}>🗑</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="add-owner-form">
+                <div className="add-owner-form-title">+ Add New Owner</div>
+                <div className="owner-form-row">
+                  <input
+                    className="owner-input"
+                    placeholder="Full name"
+                    value={newName}
+                    onChange={e => { setNewName(e.target.value); setError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                  />
+                  <input
+                    className="owner-input"
+                    placeholder="Email address"
+                    type="email"
+                    value={newEmail}
+                    onChange={e => { setNewEmail(e.target.value); setError(''); }}
+                    onKeyDown={e => e.key === 'Enter' && handleAdd()}
+                  />
+                  <button className="btn btn-primary" style={{whiteSpace:'nowrap'}} onClick={handleAdd}>Add</button>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={() => onSave(list)}>Save Directory</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function Sidebar({ cases, filter, onFilter, onEditKeywords, onEditOwners }) {
       const counts = {
         All:    cases.length,
         High:   cases.filter(c => c.priority === 'High').length,
@@ -816,6 +1064,9 @@
           </div>
 
           <div className="sidebar-bottom">
+            <button className="btn-keyword-editor" onClick={onEditOwners} style={{marginBottom:8}}>
+              <span>👥</span> Case Owner Directory
+            </button>
             <button className="btn-keyword-editor" onClick={onEditKeywords}>
               <span>🔑</span> Edit Keyword Rules
             </button>
@@ -836,8 +1087,13 @@
       const [columnMap, setColumnMap] = useState(null);
       const [pendingRows, setPendingRows] = useState([]);
       const [pendingFields, setPendingFields] = useState([]);
+      const [owners, setOwners] = useState(() => {
+        try { const s = localStorage.getItem('cq_owners'); return s ? JSON.parse(s) : []; }
+        catch { return []; }
+      });
       const [showMapper, setShowMapper] = useState(false);
       const [showKeywordEditor, setShowKeywordEditor] = useState(false);
+      const [showOwnersEditor, setShowOwnersEditor] = useState(false);
       const [search, setSearch] = useState('');
       const [filter, setFilter] = useState('All');
       const [sortKey, setSortKey] = useState('priority');
@@ -847,6 +1103,10 @@
       useEffect(() => {
         localStorage.setItem('cq_keywords', JSON.stringify(keywords));
       }, [keywords]);
+
+      useEffect(() => {
+        localStorage.setItem('cq_owners', JSON.stringify(owners));
+      }, [owners]);
 
       function handleParsed(rows, fields) {
         setPendingRows(rows);
@@ -949,6 +1209,7 @@
               filter={filter}
               onFilter={f => { setFilter(f); setExpandedId(null); }}
               onEditKeywords={() => setShowKeywordEditor(true)}
+              onEditOwners={() => setShowOwnersEditor(true)}
             />
           )}
 
@@ -1002,6 +1263,7 @@
                     onSort={handleSort}
                     expandedId={expandedId}
                     onToggleExpand={id => setExpandedId(prev => prev === id ? null : id)}
+                    owners={owners}
                   />
                 </>
               )}
@@ -1023,6 +1285,14 @@
               keywords={keywords}
               onSave={handleSaveKeywords}
               onClose={() => setShowKeywordEditor(false)}
+            />
+          )}
+
+          {showOwnersEditor && (
+            <CaseOwnersModal
+              owners={owners}
+              onSave={saved => { setOwners(saved); setShowOwnersEditor(false); }}
+              onClose={() => setShowOwnersEditor(false)}
             />
           )}
         </div>
