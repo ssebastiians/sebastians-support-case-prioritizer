@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CaseQueue — Support Prioritization</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/papaparse@5/papaparse.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --zd-dark:    #03363D;
+      --zd-mid:     #0D4D5C;
+      --zd-hover:   #1a5f6e;
+      --zd-accent:  #1F73B7;
+      --zd-accent2: #5293c7;
+      --zd-text:    #2F3941;
+      --zd-muted:   #68737A;
+      --zd-border:  #D8DCDE;
+      --zd-bg:      #F3F4F5;
+      --zd-white:   #FFFFFF;
+      --high-bg:    #FFF0EE; --high-text: #CC3340; --high-border: #F5C0C0;
+      --med-bg:     #FFF8ED; --med-text:  #AD5E18; --med-border:  #FFCE7C;
+      --low-bg:     #EDF8F4; --low-text:  #228F67; --low-border:  #AAD9C9;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    html, body, #root { height: 100%; }
+    body { font-family: var(--font); background: var(--zd-bg); color: var(--zd-text); font-size: 14px; }
+
+    /* ── Layout ── */
+    .app-shell { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 240px; min-width: 240px; background: var(--zd-dark);
+      display: flex; flex-direction: column; overflow-y: auto;
+      border-right: 1px solid rgba(255,255,255,0.06);
+    }
+    .sidebar-logo {
+      padding: 20px 20px 16px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .sidebar-logo-icon {
+      width: 32px; height: 32px; background: var(--zd-accent);
+      border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 700; color: white; flex-shrink: 0;
+    }
+    .sidebar-logo-name { color: #fff; font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+    .sidebar-logo-sub { color: rgba(255,255,255,0.45); font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; margin-top: 1px; }
+
+    .sidebar-section { padding: 16px 12px 8px; }
+    .sidebar-section-label {
+      color: rgba(255,255,255,0.35); font-size: 10px; text-transform: uppercase;
+      letter-spacing: 1px; font-weight: 600; padding: 0 8px 8px;
+    }
+    .sidebar-nav-item {
+      display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+      border-radius: 6px; cursor: pointer; color: rgba(255,255,255,0.65);
+      font-size: 13.5px; transition: all 0.15s; user-select: none;
+      border-left: 3px solid transparent; margin-bottom: 2px;
+    }
+    .sidebar-nav-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
+    .sidebar-nav-item.active { background: rgba(255,255,255,0.1); color: #fff; }
+    .sidebar-nav-item.active.nav-high  { border-left-color: var(--high-text); }
+    .sidebar-nav-item.active.nav-med   { border-left-color: var(--med-text); }
+    .sidebar-nav-item.active.nav-low   { border-left-color: var(--low-text); }
+    .sidebar-nav-item.active.nav-all   { border-left-color: var(--zd-accent2); }
+    .sidebar-nav-icon { font-size: 15px; width: 18px; text-align: center; }
+    .sidebar-nav-label { flex: 1; }
+    .sidebar-count {
+      background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.7);
+      border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 600;
+    }
+    .sidebar-count.count-high { background: rgba(204,51,64,0.25); color: #ff8a8a; }
+    .sidebar-count.count-med  { background: rgba(173,94,24,0.25); color: #ffb74d; }
+    .sidebar-count.count-low  { background: rgba(34,143,103,0.2);  color: #6fcfaa; }
+
+    .sidebar-bottom {
+      margin-top: auto; padding: 12px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .btn-keyword-editor {
+      width: 100%; padding: 9px 12px; border-radius: 6px; cursor: pointer;
+      background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.75);
+      border: 1px solid rgba(255,255,255,0.12); font-size: 13px; font-family: var(--font);
+      display: flex; align-items: center; gap: 8px; transition: all 0.15s;
+    }
+    .btn-keyword-editor:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+    /* ── Main ── */
+    .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .top-bar {
+      background: var(--zd-white); border-bottom: 1px solid var(--zd-border);
+      padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 16px;
+      flex-shrink: 0;
+    }
+    .top-bar-title { font-size: 16px; font-weight: 600; color: var(--zd-text); flex: 1; }
+    .top-bar-right { display: flex; align-items: center; gap: 12px; }
+    .top-bar-avatar {
+      width: 32px; height: 32px; border-radius: 50%; background: var(--zd-accent);
+      display: flex; align-items: center; justify-content: center;
+      color: white; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+
+    .content-area { flex: 1; overflow-y: auto; padding: 24px; }
+
+    /* ── Upload View ── */
+    .upload-view {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100%; gap: 8px;
+    }
+    .upload-card {
+      background: var(--zd-white); border-radius: 12px;
+      border: 1px solid var(--zd-border); padding: 48px 40px;
+      display: flex; flex-direction: column; align-items: center; gap: 20px;
+      max-width: 480px; width: 100%; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .upload-icon { font-size: 48px; line-height: 1; }
+    .upload-title { font-size: 20px; font-weight: 600; color: var(--zd-text); text-align: center; }
+    .upload-sub { font-size: 14px; color: var(--zd-muted); text-align: center; line-height: 1.6; }
+    .upload-dropzone {
+      width: 100%; border: 2px dashed var(--zd-border); border-radius: 8px;
+      padding: 28px 20px; text-align: center; cursor: pointer; transition: all 0.2s;
+      background: var(--zd-bg); position: relative;
+    }
+    .upload-dropzone:hover, .upload-dropzone.dragging {
+      border-color: var(--zd-accent); background: #EBF5FF;
+    }
+    .upload-dropzone input {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .upload-dropzone-text { color: var(--zd-muted); font-size: 13.5px; pointer-events: none; }
+    .upload-dropzone-text strong { color: var(--zd-accent); }
+    .upload-hint { font-size: 12px; color: var(--zd-muted); }
+
+    /* ── Toolbar ── */
+    .toolbar {
+      background: var(--zd-white); border: 1px solid var(--zd-border);
+      border-radius: 8px 8px 0 0; padding: 12px 16px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .search-wrap { position: relative; flex: 1; min-width: 180px; }
+    .search-wrap::before {
+      content: '🔍'; position: absolute; left: 10px; top: 50%;
+      transform: translateY(-50%); font-size: 13px; pointer-events: none;
+    }
+    .search-input {
+      width: 100%; padding: 8px 10px 8px 32px; border-radius: 6px;
+      border: 1px solid var(--zd-border); font-size: 13.5px; font-family: var(--font);
+      outline: none; transition: border-color 0.15s; background: var(--zd-bg);
+    }
+    .search-input:focus { border-color: var(--zd-accent); background: #fff; }
+
+    .filter-pills { display: flex; gap: 6px; }
+    .filter-pill {
+      padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 13px;
+      border: 1px solid var(--zd-border); background: var(--zd-white);
+      color: var(--zd-muted); transition: all 0.15s; font-family: var(--font);
+    }
+    .filter-pill:hover { border-color: var(--zd-accent); color: var(--zd-accent); }
+    .filter-pill.active { background: var(--zd-accent); border-color: var(--zd-accent); color: #fff; }
+    .filter-pill.active-high { background: var(--high-text); border-color: var(--high-text); color: #fff; }
+    .filter-pill.active-med  { background: var(--med-text);  border-color: var(--med-text);  color: #fff; }
+    .filter-pill.active-low  { background: var(--low-text);  border-color: var(--low-text);  color: #fff; }
+
+    .toolbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .result-count { font-size: 12.5px; color: var(--zd-muted); white-space: nowrap; }
+
+    .btn-upload-new {
+      padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+      background: var(--zd-white); border: 1px solid var(--zd-border);
+      color: var(--zd-text); font-family: var(--font); transition: all 0.15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn-upload-new:hover { border-color: var(--zd-accent); color: var(--zd-accent); }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: var(--zd-white); border: 1px solid var(--zd-border);
+      border-top: none; border-radius: 0 0 8px 8px; overflow: hidden;
+    }
+    .table-scroll { overflow-x: auto; }
+    .ticket-table { width: 100%; border-collapse: collapse; }
+    .ticket-table thead { background: var(--zd-bg); }
+    .ticket-table th {
+      padding: 10px 14px; text-align: left; font-size: 11.5px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.6px; color: var(--zd-muted);
+      border-bottom: 1px solid var(--zd-border); white-space: nowrap;
+      cursor: pointer; user-select: none; transition: color 0.15s;
+    }
+    .ticket-table th:hover { color: var(--zd-text); }
+    .ticket-table th .sort-icon { margin-left: 4px; opacity: 0.5; }
+    .ticket-table td {
+      padding: 11px 14px; border-bottom: 1px solid #F0F2F3;
+      font-size: 13.5px; vertical-align: middle;
+    }
+    .ticket-table tr:last-child td { border-bottom: none; }
+    .ticket-table tbody tr { transition: background 0.1s; cursor: pointer; }
+    .ticket-table tbody tr:hover { background: #F6F9FC; }
+    .ticket-table tbody tr.expanded { background: #EBF5FF; }
+
+    .cell-id { color: var(--zd-muted); font-size: 12.5px; white-space: nowrap; }
+    .cell-subject { max-width: 360px; }
+    .subject-text { font-weight: 500; color: var(--zd-text); line-height: 1.4; }
+    .subject-preview { font-size: 12px; color: var(--zd-muted); margin-top: 2px; display: none; }
+    tr.expanded .subject-preview { display: block; }
+
+    .cell-status { white-space: nowrap; }
+    .status-badge {
+      display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 12px; font-weight: 500;
+      background: #EDF2F7; color: #4A5568;
+    }
+    .status-open    { background: #EBF5FF; color: #1F73B7; }
+    .status-solved  { background: #EDF8F4; color: #228F67; }
+    .status-pending { background: #FFF8ED; color: #AD5E18; }
+    .status-closed  { background: #F3F4F5; color: #68737A; }
+
+    .priority-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      border: 1px solid; white-space: nowrap;
+    }
+    .badge-High   { background: var(--high-bg); color: var(--high-text); border-color: var(--high-border); }
+    .badge-Medium { background: var(--med-bg);  color: var(--med-text);  border-color: var(--med-border); }
+    .badge-Low    { background: var(--low-bg);  color: var(--low-text);  border-color: var(--low-border); }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    .cell-date { color: var(--zd-muted); font-size: 12.5px; white-space: nowrap; }
+    .cell-requester { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+
+    .expand-row td {
+      padding: 12px 14px 16px; background: #F6F9FF;
+      border-bottom: 2px solid var(--zd-accent);
+    }
+    .expand-row-inner { display: flex; gap: 24px; flex-wrap: wrap; }
+    .expand-field { display: flex; flex-direction: column; gap: 3px; }
+    .expand-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--zd-muted); }
+    .expand-value { font-size: 13px; color: var(--zd-text); }
+
+    .empty-state {
+      padding: 48px; text-align: center; color: var(--zd-muted);
+    }
+    .empty-state-icon { font-size: 36px; margin-bottom: 12px; }
+    .empty-state-text { font-size: 14px; }
+
+    /* ── Modals ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(3,54,61,0.45);
+      backdrop-filter: blur(2px); z-index: 1000;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .modal-card {
+      background: var(--zd-white); border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2); width: 100%; max-width: 580px;
+      max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;
+    }
+    .modal-header {
+      padding: 20px 24px 16px; border-bottom: 1px solid var(--zd-border);
+      display: flex; align-items: flex-start; gap: 12px; flex-shrink: 0;
+    }
+    .modal-header-icon { font-size: 22px; line-height: 1; margin-top: 1px; }
+    .modal-header-title { font-size: 17px; font-weight: 600; color: var(--zd-text); }
+    .modal-header-sub { font-size: 13px; color: var(--zd-muted); margin-top: 3px; }
+    .modal-close {
+      margin-left: auto; width: 28px; height: 28px; border-radius: 6px;
+      border: none; background: none; cursor: pointer; font-size: 18px;
+      color: var(--zd-muted); display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    .modal-close:hover { background: var(--zd-bg); color: var(--zd-text); }
+    .modal-body { padding: 20px 24px; flex: 1; }
+    .modal-footer {
+      padding: 14px 24px; border-top: 1px solid var(--zd-border);
+      display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0;
+    }
+
+    .btn { padding: 8px 18px; border-radius: 6px; font-size: 13.5px; font-weight: 500; cursor: pointer; font-family: var(--font); transition: all 0.15s; border: 1px solid transparent; }
+    .btn-primary { background: var(--zd-accent); color: white; }
+    .btn-primary:hover { background: #1a65a6; }
+    .btn-secondary { background: var(--zd-white); color: var(--zd-text); border-color: var(--zd-border); }
+    .btn-secondary:hover { border-color: #aaa; }
+    .btn-danger { background: #CC3340; color: white; }
+    .btn-danger:hover { background: #b02d38; }
+
+    /* Keyword Editor */
+    .keyword-tier { border: 1px solid var(--zd-border); border-radius: 8px; overflow: hidden; margin-bottom: 14px; }
+    .keyword-tier:last-child { margin-bottom: 0; }
+    .keyword-tier-header {
+      padding: 10px 14px; display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid var(--zd-border);
+    }
+    .keyword-tier-header.tier-High   { background: var(--high-bg); }
+    .keyword-tier-header.tier-Medium { background: var(--med-bg); }
+    .keyword-tier-header.tier-Low    { background: var(--low-bg); }
+    .keyword-tier-badge { font-size: 12px; font-weight: 600; }
+    .keyword-tier-count { color: var(--zd-muted); font-size: 12px; }
+    .keyword-tier-restore { margin-left: auto; font-size: 12px; color: var(--zd-accent); cursor: pointer; border: none; background: none; font-family: var(--font); }
+    .keyword-tier-restore:hover { text-decoration: underline; }
+    .keyword-textarea {
+      width: 100%; padding: 10px 12px; border: none; resize: vertical;
+      font-family: var(--font); font-size: 13px; color: var(--zd-text);
+      min-height: 72px; outline: none; background: #fff;
+    }
+    .keyword-hint { padding: 6px 12px 10px; font-size: 11.5px; color: var(--zd-muted); background: #fff; }
+
+    /* Column Mapper */
+    .col-map-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .col-map-label { font-size: 13px; font-weight: 500; color: var(--zd-text); width: 110px; flex-shrink: 0; }
+    .col-map-label span { font-size: 11px; color: var(--zd-muted); display: block; font-weight: 400; }
+    .col-map-select {
+      flex: 1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--zd-border);
+      font-size: 13px; font-family: var(--font); background: var(--zd-white);
+      color: var(--zd-text); outline: none;
+    }
+    .col-map-select:focus { border-color: var(--zd-accent); }
+    .col-map-preview { margin-top: 16px; }
+    .preview-label { font-size: 12px; font-weight: 600; color: var(--zd-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .preview-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    .preview-table th { padding: 6px 10px; background: var(--zd-bg); border: 1px solid var(--zd-border); color: var(--zd-muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.4px; }
+    .preview-table td { padding: 6px 10px; border: 1px solid var(--zd-border); color: var(--zd-text); }
+    .col-required { color: var(--high-text); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback } = React;
+
+    /* ── Constants ── */
+    const DEFAULT_KEYWORDS = {
+      High:   ['urgent', 'critical', 'broken', 'down', 'outage', 'emergency', 'asap', 'blocked', 'failure', 'crash', 'data loss', 'security breach', 'cannot login', 'payment failed'],
+      Medium: ['slow', 'delay', 'issue', 'problem', 'error', 'not working', 'wrong', 'incorrect', 'missing', 'glitch', 'bug', 'intermittent', 'sometimes'],
+      Low:    ['question', 'how to', 'feature request', 'inquiry', 'info', 'update', 'when will', 'documentation', 'suggestion', 'feedback'],
+    };
+
+    const PRIORITY_ORDER = ['High', 'Medium', 'Low'];
+
+    /* ── Helpers ── */
+    function detectSubjectColumn(fields) {
+      const priorities = [
+        { score: 100, test: f => f.toLowerCase() === 'subject' },
+        { score: 90,  test: f => f.toLowerCase() === 'title' },
+        { score: 85,  test: f => f.toLowerCase() === 'summary' },
+        { score: 80,  test: f => f.toLowerCase() === 'name' },
+        { score: 70,  test: f => f.toLowerCase().includes('subject') },
+        { score: 65,  test: f => f.toLowerCase().includes('title') },
+        { score: 55,  test: f => f.toLowerCase().includes('description') },
+        { score: 45,  test: f => f.toLowerCase().includes('issue') },
+        { score: 35,  test: f => f.toLowerCase().includes('problem') },
+        { score: 25,  test: f => f.toLowerCase().includes('detail') },
+      ];
+      let best = { field: fields[0] || '', score: 0 };
+      for (const field of fields) {
+        for (const p of priorities) {
+          if (p.test(field) && p.score > best.score) {
+            best = { field, score: p.score };
+          }
+        }
+      }
+      return best;
+    }
+
+    function detectColumn(fields, patterns) {
+      // Exact match first
+      for (const pattern of patterns) {
+        const exact = fields.find(f => f.toLowerCase().trim() === pattern.source?.replace(/[\\^$]/g, '').toLowerCase() || pattern.test(f.toLowerCase()));
+        if (exact) return exact;
+      }
+      return '';
+    }
+
+    // Exact known-header lookup (case-insensitive, trimmed)
+    function findExact(fields, ...names) {
+      for (const name of names) {
+        const match = fields.find(f => f.trim().toLowerCase() === name.toLowerCase());
+        if (match) return match;
+      }
+      return '';
+    }
+
+    function autoDetectColumns(fields) {
+      return {
+        subject:    findExact(fields, 'Subject')     || detectSubjectColumn(fields).field,
+        id:         findExact(fields, 'Case Number')  || detectColumn(fields, [/^id$/, /case.?number/, /ticket.?id/, /case.?id/, /^#/, /^number$/]),
+        status:     findExact(fields, 'Status')       || detectColumn(fields, [/^status$/, /state/]),
+        createdBy:  findExact(fields, 'Created By')   || detectColumn(fields, [/created.?by/, /creator/, /reporter/]),
+        accountName:findExact(fields, 'Account Name') || detectColumn(fields, [/account.?name/, /account/, /company/, /organization/]),
+        caseOrigin: findExact(fields, 'Case Origin')  || detectColumn(fields, [/case.?origin/, /origin/, /channel/, /source/]),
+        ageHours:   findExact(fields, 'Age (Hours)')  || detectColumn(fields, [/age.*hours/, /age.?hr/, /^age$/]),
+        open:       findExact(fields, 'Open')         || detectColumn(fields, [/^open$/, /open.?date/, /opened/]),
+        closed:     findExact(fields, 'Closed')       || detectColumn(fields, [/^closed$/, /close.?date/, /closed.?at/]),
+        jiraTicket: findExact(fields, 'Jira Ticket')  || detectColumn(fields, [/jira/, /ticket.?number/, /jira.?ticket/]),
+        caseOwner:  findExact(fields, 'Case Owner')   || detectColumn(fields, [/case.?owner/, /owner/, /assignee/, /assigned.?to/]),
+      };
+    }
+
+    function isHighConfidence(map) {
+      // Skip mapper if subject was found — that's the only required field
+      return !!map.subject;
+    }
+
+    function assignPriority(subjectText, keywords) {
+      if (!subjectText) return 'Low';
+      const lower = subjectText.toLowerCase();
+      for (const tier of PRIORITY_ORDER) {
+        for (const kw of (keywords[tier] || [])) {
+          const trimmed = kw.toLowerCase().trim();
+          if (trimmed && lower.includes(trimmed)) return tier;
+        }
+      }
+      return 'Low';
+    }
+
+    function recalculate(cases, keywords) {
+      return cases.map(c => ({ ...c, priority: assignPriority(c._subject, keywords) }));
+    }
+
+    function normalizeStatus(s) {
+      if (!s) return '';
+      const lower = s.toLowerCase().trim();
+      if (['open', 'new', 'active'].includes(lower)) return 'open';
+      if (['solved', 'resolved', 'closed', 'done', 'complete', 'completed'].includes(lower)) return lower === 'closed' ? 'closed' : 'solved';
+      if (['pending', 'hold', 'on hold', 'waiting'].includes(lower)) return 'pending';
+      return 'other';
+    }
+
+    /* ── Components ── */
+    function PriorityBadge({ priority }) {
+      const icons = { High: '🔴', Medium: '🟡', Low: '🟢' };
+      return (
+        <span className={`priority-badge badge-${priority}`}>
+          <span className="badge-dot" />
+          {priority}
+        </span>
+      );
+    }
+
+    function StatusBadge({ status }) {
+      const norm = normalizeStatus(status);
+      return <span className={`status-badge status-${norm}`}>{status || '—'}</span>;
+    }
+
+    function KeywordEditorModal({ keywords, onSave, onClose }) {
+      const [drafts, setDrafts] = useState({
+        High:   keywords.High.join(', '),
+        Medium: keywords.Medium.join(', '),
+        Low:    keywords.Low.join(', '),
+      });
+
+      function parseKws(str) {
+        return [...new Set(str.split(/,|\n/).map(s => s.trim()).filter(Boolean))];
+      }
+
+      function countKws(str) { return parseKws(str).length; }
+
+      function restore(tier) {
+        setDrafts(d => ({ ...d, [tier]: DEFAULT_KEYWORDS[tier].join(', ') }));
+      }
+
+      function handleSave() {
+        onSave({
+          High:   parseKws(drafts.High),
+          Medium: parseKws(drafts.Medium),
+          Low:    parseKws(drafts.Low),
+        });
+      }
+
+      const tierInfo = {
+        High:   { label: 'High Priority', color: 'var(--high-text)', badgeClass: 'badge-High' },
+        Medium: { label: 'Medium Priority', color: 'var(--med-text)', badgeClass: 'badge-Medium' },
+        Low:    { label: 'Low Priority', color: 'var(--low-text)', badgeClass: 'badge-Low' },
+      };
+
+      return (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+          <div className="modal-card">
+            <div className="modal-header">
+              <span className="modal-header-icon">🔑</span>
+              <div>
+                <div className="modal-header-title">Keyword Priority Rules</div>
+                <div className="modal-header-sub">Cases whose subject matches a keyword are automatically prioritized</div>
+              </div>
+              <button className="modal-close" onClick={onClose}>×</button>
+            </div>
+            <div className="modal-body">
+              {PRIORITY_ORDER.map(tier => (
+                <div key={tier} className="keyword-tier">
+                  <div className={`keyword-tier-header tier-${tier}`}>
+                    <span className={`priority-badge badge-${tier} keyword-tier-badge`}>
+                      <span className="badge-dot" />
+                      {tierInfo[tier].label}
+                    </span>
+                    <span className="keyword-tier-count">{countKws(drafts[tier])} keywords</span>
+                    <button className="keyword-tier-restore" onClick={() => restore(tier)}>
+                      ↺ Restore defaults
+                    </button>
+                  </div>
+                  <textarea
+                    className="keyword-textarea"
+                    value={drafts[tier]}
+                    onChange={e => setDrafts(d => ({ ...d, [tier]: e.target.value }))}
+                    placeholder={`Add keywords separated by commas (e.g. urgent, critical, outage)`}
+                  />
+                  <div className="keyword-hint">Comma or newline separated · Case-insensitive · First match wins · High tier evaluated before Medium, Medium before Low</div>
+                </div>
+              ))}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSave}>Save & Recalculate</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ColumnMapperModal({ fields, rawRows, initialMap, onConfirm, onClose }) {
+      const [map, setMap] = useState(initialMap);
+
+      const logicalFields = [
+        { key: 'subject',     label: 'Subject',       note: 'Required — used for priority scoring', required: true },
+        { key: 'id',          label: 'Case Number',    note: 'Unique case identifier' },
+        { key: 'status',      label: 'Status',         note: 'Open, Solved, Pending, etc.' },
+        { key: 'createdBy',   label: 'Created By',     note: 'Who submitted the case' },
+        { key: 'accountName', label: 'Account Name',   note: 'Customer or company name' },
+        { key: 'caseOrigin',  label: 'Case Origin',    note: 'Email, Phone, Web, etc.' },
+        { key: 'ageHours',    label: 'Age (Hours)',    note: 'How long the case has been open' },
+        { key: 'open',        label: 'Open',           note: 'Open date / flag' },
+        { key: 'closed',      label: 'Closed',         note: 'Closed date / flag' },
+        { key: 'jiraTicket',  label: 'Jira Ticket',    note: 'Linked Jira issue key' },
+        { key: 'caseOwner',   label: 'Case Owner',     note: 'Assigned support agent' },
+      ];
+
+      const preview = rawRows.slice(0, 3);
+
+      return (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+          <div className="modal-card" style={{maxWidth: 620}}>
+            <div className="modal-header">
+              <span className="modal-header-icon">🗂️</span>
+              <div>
+                <div className="modal-header-title">Map CSV Columns</div>
+                <div className="modal-header-sub">Match your CSV columns to the fields CaseQueue uses</div>
+              </div>
+              <button className="modal-close" onClick={onClose}>×</button>
+            </div>
+            <div className="modal-body">
+              {logicalFields.map(({ key, label, note, required }) => (
+                <div key={key} className="col-map-row">
+                  <div className="col-map-label">
+                    {label} {required && <span className="col-required">*</span>}
+                    <span>{note}</span>
+                  </div>
+                  <select
+                    className="col-map-select"
+                    value={map[key] || ''}
+                    onChange={e => setMap(m => ({ ...m, [key]: e.target.value }))}
+                  >
+                    <option value="">— skip —</option>
+                    {fields.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+              ))}
+
+              {preview.length > 0 && (
+                <div className="col-map-preview">
+                  <div className="preview-label">Preview (first {preview.length} rows)</div>
+                  <div style={{overflowX:'auto'}}>
+                    <table className="preview-table">
+                      <thead>
+                        <tr>
+                          {logicalFields.filter(f => map[f.key]).map(f => (
+                            <th key={f.key}>{f.label}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {preview.map((row, i) => (
+                          <tr key={i}>
+                            {logicalFields.filter(f => map[f.key]).map(f => (
+                              <td key={f.key}>{row[map[f.key]] || '—'}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button
+                className="btn btn-primary"
+                disabled={!map.subject}
+                onClick={() => map.subject && onConfirm(map)}
+                style={!map.subject ? {opacity:0.5,cursor:'not-allowed'} : {}}
+              >
+                Import Cases
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function UploadView({ onParsed }) {
+      const [dragging, setDragging] = useState(false);
+      const [error, setError] = useState('');
+      const inputRef = useRef();
+
+      function handleFile(file) {
+        if (!file) return;
+        if (!file.name.endsWith('.csv') && file.type !== 'text/csv') {
+          setError('Please upload a .csv file.');
+          return;
+        }
+        setError('');
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: ({ data, meta }) => {
+            if (!data.length) { setError('The CSV file appears to be empty.'); return; }
+            onParsed(data, meta.fields || []);
+          },
+          error: err => setError(`Parse error: ${err.message}`),
+        });
+        if (inputRef.current) inputRef.current.value = '';
+      }
+
+      return (
+        <div className="upload-view">
+          <div className="upload-card">
+            <div className="upload-icon">📋</div>
+            <div className="upload-title">Import Support Cases</div>
+            <div className="upload-sub">
+              Upload a CSV file containing your customer support cases. CaseQueue will automatically detect columns and assign priorities based on your keyword rules.
+            </div>
+            <div
+              className={`upload-dropzone ${dragging ? 'dragging' : ''}`}
+              onDragOver={e => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={e => { e.preventDefault(); setDragging(false); handleFile(e.dataTransfer.files[0]); }}
+            >
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".csv,text/csv"
+                onChange={e => handleFile(e.target.files[0])}
+              />
+              <div className="upload-dropzone-text">
+                <strong>Click to upload</strong> or drag &amp; drop your CSV file here
+              </div>
+            </div>
+            {error && <div style={{color:'var(--high-text)',fontSize:13,textAlign:'center'}}>{error}</div>}
+            <div className="upload-hint">Recognized columns: Case Number · Status · Created By · Account Name · Subject · Case Origin · Age (Hours) · Open · Closed · Jira Ticket · Case Owner</div>
+          </div>
+        </div>
+      );
+    }
+
+    // Friendly label map for known internal keys
+    const FIELD_LABELS = {
+      id: 'Case Number', subject: 'Subject', status: 'Status',
+      createdBy: 'Created By', accountName: 'Account Name', caseOrigin: 'Case Origin',
+      ageHours: 'Age (Hours)', open: 'Open', closed: 'Closed',
+      jiraTicket: 'Jira Ticket', caseOwner: 'Case Owner',
+    };
+
+    // Keys shown in the main table columns (excluded from expand detail)
+    const MAIN_COL_KEYS = new Set(['id', 'subject', 'priority', 'status', 'accountName', 'caseOwner', 'ageHours']);
+
+    function TicketTable({ cases, sortKey, sortDir, onSort, expandedId, onToggleExpand }) {
+      const columns = [
+        { key: 'id',          label: 'Case #',       width: 110 },
+        { key: 'subject',     label: 'Subject',       width: null },
+        { key: 'priority',    label: 'Priority',      width: 110 },
+        { key: 'status',      label: 'Status',        width: 100 },
+        { key: 'accountName', label: 'Account Name',  width: 150 },
+        { key: 'caseOwner',   label: 'Case Owner',    width: 140 },
+        { key: 'ageHours',    label: 'Age (Hrs)',     width: 90  },
+      ];
+
+      const COL_COUNT = columns.length;
+
+      return (
+        <div className="table-wrap">
+          <div className="table-scroll">
+            <table className="ticket-table">
+              <thead>
+                <tr>
+                  {columns.map(col => (
+                    <th key={col.key} style={col.width ? {width:col.width} : {}} onClick={() => onSort(col.key)}>
+                      {col.label}
+                      <span className="sort-icon">
+                        {sortKey === col.key ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cases.length === 0 ? (
+                  <tr>
+                    <td colSpan={COL_COUNT}>
+                      <div className="empty-state">
+                        <div className="empty-state-icon">🔍</div>
+                        <div className="empty-state-text">No cases match your current filters</div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : cases.map((c, i) => {
+                  const isExpanded = expandedId === c._uid;
+                  // Detail fields: known mapped fields NOT in main columns, plus any extra CSV columns
+                  const detailFields = [
+                    ['createdBy',  c.createdBy],
+                    ['caseOrigin', c.caseOrigin],
+                    ['open',       c.open],
+                    ['closed',     c.closed],
+                    ['jiraTicket', c.jiraTicket],
+                    // extra unmapped columns
+                    ...Object.entries(c).filter(([k]) =>
+                      !k.startsWith('_') && !MAIN_COL_KEYS.has(k) && !(k in FIELD_LABELS)
+                    ),
+                  ].filter(([, v]) => v && String(v).trim());
+
+                  return (
+                    <React.Fragment key={c._uid}>
+                      <tr
+                        className={isExpanded ? 'expanded' : ''}
+                        onClick={() => onToggleExpand(c._uid)}
+                      >
+                        <td className="cell-id">{c.id || `#${i + 1}`}</td>
+                        <td className="cell-subject">
+                          <div className="subject-text">{c._subject || '—'}</div>
+                        </td>
+                        <td><PriorityBadge priority={c.priority} /></td>
+                        <td className="cell-status"><StatusBadge status={c.status} /></td>
+                        <td style={{maxWidth:150,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.accountName || '—'}</td>
+                        <td style={{maxWidth:140,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.caseOwner || '—'}</td>
+                        <td className="cell-date">{c.ageHours || '—'}</td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="expand-row">
+                          <td colSpan={COL_COUNT}>
+                            <div className="expand-row-inner">
+                              {detailFields.map(([k, v]) => (
+                                <div key={k} className="expand-field">
+                                  <span className="expand-label">{FIELD_LABELS[k] || k}</span>
+                                  <span className="expand-value">{String(v)}</span>
+                                </div>
+                              ))}
+                              {detailFields.length === 0 && (
+                                <span style={{color:'var(--zd-muted)',fontSize:13}}>No additional fields</span>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    function Sidebar({ cases, filter, onFilter, onEditKeywords }) {
+      const counts = {
+        All:    cases.length,
+        High:   cases.filter(c => c.priority === 'High').length,
+        Medium: cases.filter(c => c.priority === 'Medium').length,
+        Low:    cases.filter(c => c.priority === 'Low').length,
+      };
+
+      const navItems = [
+        { key: 'All',    label: 'All Cases',       icon: '📂', cls: 'nav-all' },
+        { key: 'High',   label: 'High Priority',   icon: '🔴', cls: 'nav-high' },
+        { key: 'Medium', label: 'Medium Priority',  icon: '🟡', cls: 'nav-med' },
+        { key: 'Low',    label: 'Low Priority',    icon: '🟢', cls: 'nav-low' },
+      ];
+
+      const countClass = { All: '', High: 'count-high', Medium: 'count-med', Low: 'count-low' };
+
+      return (
+        <div className="sidebar">
+          <div className="sidebar-logo">
+            <div className="sidebar-logo-icon">CQ</div>
+            <div>
+              <div className="sidebar-logo-name">CaseQueue</div>
+              <div className="sidebar-logo-sub">Support Priority</div>
+            </div>
+          </div>
+
+          <div className="sidebar-section">
+            <div className="sidebar-section-label">Views</div>
+            {navItems.map(item => (
+              <div
+                key={item.key}
+                className={`sidebar-nav-item ${item.cls} ${filter === item.key ? 'active' : ''}`}
+                onClick={() => onFilter(item.key)}
+              >
+                <span className="sidebar-nav-icon">{item.icon}</span>
+                <span className="sidebar-nav-label">{item.label}</span>
+                <span className={`sidebar-count ${countClass[item.key]}`}>{counts[item.key]}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="sidebar-bottom">
+            <button className="btn-keyword-editor" onClick={onEditKeywords}>
+              <span>🔑</span> Edit Keyword Rules
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    /* ── Main App ── */
+    function App() {
+      const [cases, setCases] = useState([]);
+      const [keywords, setKeywords] = useState(() => {
+        try {
+          const s = localStorage.getItem('cq_keywords');
+          return s ? JSON.parse(s) : DEFAULT_KEYWORDS;
+        } catch { return DEFAULT_KEYWORDS; }
+      });
+      const [columnMap, setColumnMap] = useState(null);
+      const [pendingRows, setPendingRows] = useState([]);
+      const [pendingFields, setPendingFields] = useState([]);
+      const [showMapper, setShowMapper] = useState(false);
+      const [showKeywordEditor, setShowKeywordEditor] = useState(false);
+      const [search, setSearch] = useState('');
+      const [filter, setFilter] = useState('All');
+      const [sortKey, setSortKey] = useState('priority');
+      const [sortDir, setSortDir] = useState('asc');
+      const [expandedId, setExpandedId] = useState(null);
+
+      useEffect(() => {
+        localStorage.setItem('cq_keywords', JSON.stringify(keywords));
+      }, [keywords]);
+
+      function handleParsed(rows, fields) {
+        setPendingRows(rows);
+        setPendingFields(fields);
+        const autoMap = autoDetectColumns(fields);
+        setColumnMap(autoMap);
+        // Skip mapper when we have high confidence detection
+        if (isHighConfidence(autoMap)) {
+          commitRows(rows, fields, autoMap);
+        } else {
+          setShowMapper(true);
+        }
+      }
+
+      function commitRows(rows, fields, map) {
+        const ts = Date.now();
+        const mapped = rows.map((row, i) => {
+          const g = (key) => map[key] ? (row[map[key]] || '').trim() : '';
+          const subject = g('subject');
+          const entry = {
+            _uid:        `row_${i}_${ts}`,
+            _subject:    subject,
+            id:          g('id'),
+            subject:     subject,
+            status:      g('status'),
+            createdBy:   g('createdBy'),
+            accountName: g('accountName'),
+            caseOrigin:  g('caseOrigin'),
+            ageHours:    g('ageHours'),
+            open:        g('open'),
+            closed:      g('closed'),
+            jiraTicket:  g('jiraTicket'),
+            caseOwner:   g('caseOwner'),
+            priority:    assignPriority(subject, keywords),
+          };
+          // Keep any extra columns not mapped above for the expanded detail view
+          fields.forEach(f => { if (!(f in entry)) entry[f] = row[f]; });
+          return entry;
+        });
+        setCases(mapped);
+        setColumnMap(map);
+        setShowMapper(false);
+        setPendingRows([]);
+        setPendingFields([]);
+      }
+
+      function handleConfirmMap(map) {
+        commitRows(pendingRows, pendingFields, map);
+      }
+
+      function handleSaveKeywords(newKws) {
+        setKeywords(newKws);
+        setCases(prev => recalculate(prev, newKws));
+        setShowKeywordEditor(false);
+      }
+
+      function handleSort(key) {
+        setSortDir(prev => sortKey === key ? (prev === 'asc' ? 'desc' : 'asc') : 'asc');
+        setSortKey(key);
+      }
+
+      const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+
+      const visible = cases
+        .filter(c => filter === 'All' || c.priority === filter)
+        .filter(c => {
+          if (!search) return true;
+          const q = search.toLowerCase();
+          return c._subject.toLowerCase().includes(q) ||
+            (c.id          && String(c.id).toLowerCase().includes(q)) ||
+            (c.accountName && String(c.accountName).toLowerCase().includes(q)) ||
+            (c.caseOwner   && String(c.caseOwner).toLowerCase().includes(q)) ||
+            (c.createdBy   && String(c.createdBy).toLowerCase().includes(q)) ||
+            (c.jiraTicket  && String(c.jiraTicket).toLowerCase().includes(q));
+        })
+        .sort((a, b) => {
+          let va = a[sortKey] ?? '', vb = b[sortKey] ?? '';
+          if (sortKey === 'priority') { va = PRIORITY_RANK[a.priority]; vb = PRIORITY_RANK[b.priority]; }
+          else { va = String(va).toLowerCase(); vb = String(vb).toLowerCase(); }
+          if (va < vb) return sortDir === 'asc' ? -1 : 1;
+          if (va > vb) return sortDir === 'asc' ?  1 : -1;
+          return 0;
+        });
+
+      const filterPillClass = f => {
+        const map = { High: 'active-high', Medium: 'active-med', Low: 'active-low' };
+        if (filter !== f) return '';
+        return f === 'All' ? 'active' : map[f];
+      };
+
+      const pageTitle = filter === 'All'
+        ? 'All Cases'
+        : `${filter} Priority Cases`;
+
+      return (
+        <div className="app-shell">
+          {cases.length > 0 && (
+            <Sidebar
+              cases={cases}
+              filter={filter}
+              onFilter={f => { setFilter(f); setExpandedId(null); }}
+              onEditKeywords={() => setShowKeywordEditor(true)}
+            />
+          )}
+
+          <div className="main-content">
+            <div className="top-bar">
+              <div className="top-bar-title">{cases.length > 0 ? pageTitle : 'CaseQueue'}</div>
+              <div className="top-bar-right">
+                {cases.length > 0 && (
+                  <button className="btn-upload-new" onClick={() => { setCases([]); setSearch(''); setFilter('All'); setExpandedId(null); }}>
+                    ↑ New Import
+                  </button>
+                )}
+                <div className="top-bar-avatar">A</div>
+              </div>
+            </div>
+
+            <div className="content-area">
+              {cases.length === 0 ? (
+                <UploadView onParsed={handleParsed} />
+              ) : (
+                <>
+                  <div className="toolbar">
+                    <div className="search-wrap">
+                      <input
+                        className="search-input"
+                        type="text"
+                        placeholder="Search by subject, ID, or requester…"
+                        value={search}
+                        onChange={e => { setSearch(e.target.value); setExpandedId(null); }}
+                      />
+                    </div>
+                    <div className="filter-pills">
+                      {['All', 'High', 'Medium', 'Low'].map(f => (
+                        <button
+                          key={f}
+                          className={`filter-pill ${filterPillClass(f)}`}
+                          onClick={() => { setFilter(f); setExpandedId(null); }}
+                        >
+                          {f}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="toolbar-right">
+                      <span className="result-count">{visible.length} of {cases.length} case{cases.length !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                  <TicketTable
+                    cases={visible}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    expandedId={expandedId}
+                    onToggleExpand={id => setExpandedId(prev => prev === id ? null : id)}
+                  />
+                </>
+              )}
+            </div>
+          </div>
+
+          {showMapper && (
+            <ColumnMapperModal
+              fields={pendingFields}
+              rawRows={pendingRows}
+              initialMap={columnMap}
+              onConfirm={handleConfirmMap}
+              onClose={() => { setShowMapper(false); setPendingRows([]); setPendingFields([]); }}
+            />
+          )}
+
+          {showKeywordEditor && (
+            <KeywordEditorModal
+              keywords={keywords}
+              onSave={handleSaveKeywords}
+              onClose={() => setShowKeywordEditor(false)}
+            />
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
