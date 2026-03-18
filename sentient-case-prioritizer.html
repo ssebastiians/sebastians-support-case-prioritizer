@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CaseQueue — Support Prioritization</title>
+  <title>Sentient Case Prioritizer</title>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/papaparse@5/papaparse.min.js"></script>
@@ -110,34 +110,64 @@
 
     .content-area { flex: 1; overflow-y: auto; padding: 24px; }
 
+    /* ── Space Landing Mode ── */
+    body.space-mode { background: #030812; }
+    body.space-mode .top-bar {
+      background: rgba(3,8,18,0.6); border-bottom: 1px solid rgba(255,255,255,0.06);
+      backdrop-filter: blur(12px);
+    }
+    body.space-mode .top-bar-title { color: rgba(255,255,255,0.85); }
+    body.space-mode .top-bar-avatar { background: rgba(96,165,250,0.2); border: 1px solid rgba(96,165,250,0.3); color: #93c5fd; }
+
     /* ── Upload View ── */
+    .stars-canvas {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; display: block;
+    }
     .upload-view {
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      min-height: 100%; gap: 8px;
+      min-height: 100%; gap: 32px; position: relative; padding: 24px;
+    }
+    .upload-hero { text-align: center; position: relative; z-index: 1; }
+    .upload-hero-eyebrow {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 3px; font-weight: 600;
+      color: rgba(96,165,250,0.7); margin-bottom: 16px;
+    }
+    .upload-hero-title {
+      font-size: 52px; font-weight: 800; letter-spacing: -2px; line-height: 1.05;
+      background: linear-gradient(135deg, #ffffff 20%, #93c5fd 55%, #c4b5fd 90%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; margin-bottom: 16px;
+    }
+    .upload-hero-sub {
+      font-size: 16px; color: rgba(255,255,255,0.38); max-width: 380px;
+      margin: 0 auto; line-height: 1.65;
     }
     .upload-card {
-      background: var(--zd-white); border-radius: 12px;
-      border: 1px solid var(--zd-border); padding: 48px 40px;
-      display: flex; flex-direction: column; align-items: center; gap: 20px;
-      max-width: 480px; width: 100%; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      background: rgba(255,255,255,0.04); border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.1); padding: 40px;
+      display: flex; flex-direction: column; align-items: center; gap: 18px;
+      max-width: 480px; width: 100%; position: relative; z-index: 1;
+      box-shadow: 0 0 80px rgba(96,165,250,0.07), 0 24px 64px rgba(0,0,0,0.5);
+      backdrop-filter: blur(24px);
     }
-    .upload-icon { font-size: 48px; line-height: 1; }
-    .upload-title { font-size: 20px; font-weight: 600; color: var(--zd-text); text-align: center; }
-    .upload-sub { font-size: 14px; color: var(--zd-muted); text-align: center; line-height: 1.6; }
+    .upload-icon { font-size: 44px; line-height: 1; filter: drop-shadow(0 0 12px rgba(147,197,253,0.5)); }
+    .upload-title { font-size: 19px; font-weight: 700; color: #fff; text-align: center; }
+    .upload-sub { font-size: 13.5px; color: rgba(255,255,255,0.42); text-align: center; line-height: 1.65; }
     .upload-dropzone {
-      width: 100%; border: 2px dashed var(--zd-border); border-radius: 8px;
-      padding: 28px 20px; text-align: center; cursor: pointer; transition: all 0.2s;
-      background: var(--zd-bg); position: relative;
+      width: 100%; border: 2px dashed rgba(96,165,250,0.3); border-radius: 12px;
+      padding: 30px 20px; text-align: center; cursor: pointer; transition: all 0.3s;
+      background: rgba(96,165,250,0.04); position: relative;
     }
     .upload-dropzone:hover, .upload-dropzone.dragging {
-      border-color: var(--zd-accent); background: #EBF5FF;
+      border-color: rgba(96,165,250,0.7); background: rgba(96,165,250,0.09);
+      box-shadow: 0 0 32px rgba(96,165,250,0.12);
     }
     .upload-dropzone input {
       position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
     }
-    .upload-dropzone-text { color: var(--zd-muted); font-size: 13.5px; pointer-events: none; }
-    .upload-dropzone-text strong { color: var(--zd-accent); }
-    .upload-hint { font-size: 12px; color: var(--zd-muted); }
+    .upload-dropzone-text { color: rgba(255,255,255,0.5); font-size: 13.5px; pointer-events: none; }
+    .upload-dropzone-text strong { color: #60a5fa; }
+    .upload-hint { font-size: 11.5px; color: rgba(255,255,255,0.22); text-align: center; }
 
     /* ── Toolbar ── */
     .toolbar {
@@ -790,7 +820,7 @@
               <span className="modal-header-icon">🗂️</span>
               <div>
                 <div className="modal-header-title">Map CSV Columns</div>
-                <div className="modal-header-sub">Match your CSV columns to the fields CaseQueue uses</div>
+                <div className="modal-header-sub">Match your CSV columns to the fields Sentient uses</div>
               </div>
               <button className="modal-close" onClick={onClose}>×</button>
             </div>
@@ -858,6 +888,62 @@
       const [dragging, setDragging] = useState(false);
       const [error, setError] = useState('');
       const inputRef = useRef();
+      const canvasRef = useRef();
+
+      useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        let animId;
+
+        const resize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+        resize();
+        window.addEventListener('resize', resize);
+
+        const stars = Array.from({ length: 240 }, () => ({
+          x: Math.random(), y: Math.random(),
+          r: Math.random() * 1.6 + 0.2,
+          alpha: Math.random() * 0.7 + 0.3,
+          speed: Math.random() * 0.006 + 0.001,
+          phase: Math.random() * Math.PI * 2,
+        }));
+
+        const draw = (t) => {
+          const W = canvas.width, H = canvas.height;
+          // Deep space gradient
+          const bg = ctx.createRadialGradient(W*0.5, H*0.4, 0, W*0.5, H*0.4, Math.max(W,H)*0.9);
+          bg.addColorStop(0, '#0b1628'); bg.addColorStop(0.6, '#060e1c'); bg.addColorStop(1, '#020609');
+          ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+          // Nebula blobs
+          [[W*0.75, H*0.25, W*0.45, 'rgba(88,60,220,0.07)'], [W*0.2, H*0.7, W*0.38, 'rgba(20,80,200,0.06)'], [W*0.5, H*0.6, W*0.3, 'rgba(40,140,180,0.04)']].forEach(([cx,cy,r,color]) => {
+            const g = ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+            g.addColorStop(0, color); g.addColorStop(1, 'transparent');
+            ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+          });
+
+          // Stars with twinkle
+          stars.forEach(s => {
+            const twinkle = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * s.speed * 1000 + s.phase));
+            const a = twinkle * s.alpha;
+            ctx.beginPath();
+            ctx.arc(s.x*W, s.y*H, s.r, 0, Math.PI*2);
+            ctx.fillStyle = `rgba(220,235,255,${a})`;
+            ctx.fill();
+            if (s.r > 1.1) {
+              const glow = ctx.createRadialGradient(s.x*W, s.y*H, 0, s.x*W, s.y*H, s.r*4);
+              glow.addColorStop(0, `rgba(180,210,255,${a*0.4})`);
+              glow.addColorStop(1, 'transparent');
+              ctx.fillStyle = glow;
+              ctx.beginPath(); ctx.arc(s.x*W, s.y*H, s.r*4, 0, Math.PI*2); ctx.fill();
+            }
+          });
+
+          animId = requestAnimationFrame(draw);
+        };
+        animId = requestAnimationFrame(draw);
+        return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', resize); };
+      }, []);
 
       function handleFile(file) {
         if (!file) return;
@@ -880,11 +966,17 @@
 
       return (
         <div className="upload-view">
+          <canvas ref={canvasRef} className="stars-canvas" />
+          <div className="upload-hero">
+            <div className="upload-hero-eyebrow">AI-Powered Support Intelligence</div>
+            <div className="upload-hero-title">Sentient Case Prioritizer</div>
+            <div className="upload-hero-sub">Instantly rank and triage your support queue with intelligent, keyword-driven precision.</div>
+          </div>
           <div className="upload-card">
-            <div className="upload-icon">📋</div>
+            <div className="upload-icon">🛸</div>
             <div className="upload-title">Import Support Cases</div>
             <div className="upload-sub">
-              Upload a CSV file containing your customer support cases. CaseQueue will automatically detect columns and assign priorities based on your keyword rules.
+              Upload a CSV file and Sentient will automatically detect your columns and assign priorities based on your rules.
             </div>
             <div
               className={`upload-dropzone ${dragging ? 'dragging' : ''}`}
@@ -902,7 +994,7 @@
                 <strong>Click to upload</strong> or drag &amp; drop your CSV file here
               </div>
             </div>
-            {error && <div style={{color:'var(--high-text)',fontSize:13,textAlign:'center'}}>{error}</div>}
+            {error && <div style={{color:'#f87171',fontSize:13,textAlign:'center'}}>{error}</div>}
             <div className="upload-hint">Recognized columns: Case Number · Status · Created By · Account Name · Subject · Case Origin · Age (Hours) · Open · Closed · Jira Ticket · Case Owner</div>
           </div>
         </div>
@@ -1073,7 +1165,7 @@
       const body = encodeURIComponent(
 `Hi ${ownerName},
 
-This is an automated alert from CaseQueue. The following support case has been assigned to you and requires your immediate attention. Please take action within the next hour.
+This is an automated alert from Sentient Case Prioritizer. The following support case has been assigned to you and requires your immediate attention. Please take action within the next hour.
 
 ─────────────────────────────────
 CASE DETAILS
@@ -1090,7 +1182,7 @@ Please log in to your support system, review this case, and provide a response o
 
 If you are unable to handle this case within the hour, please escalate it to your team lead immediately.
 
-— CaseQueue Automated Notification`
+— Sentient Case Prioritizer`
       );
 
       window.location.href = `mailto:${ownerEmail}?subject=${emailSubject}&body=${body}`;
@@ -1523,10 +1615,10 @@ If you are unable to handle this case within the hour, please escalate it to you
       return (
         <div className="sidebar">
           <div className="sidebar-logo">
-            <div className="sidebar-logo-icon">CQ</div>
+            <div className="sidebar-logo-icon" style={{background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',fontSize:13,letterSpacing:-0.5}}>SCP</div>
             <div>
-              <div className="sidebar-logo-name">CaseQueue</div>
-              <div className="sidebar-logo-sub">Support Priority</div>
+              <div className="sidebar-logo-name">Sentient</div>
+              <div className="sidebar-logo-sub">Case Prioritizer</div>
             </div>
           </div>
 
@@ -1605,6 +1697,10 @@ If you are unable to handle this case within the hour, please escalate it to you
       const [sortKey, setSortKey] = useState('priority');
       const [sortDir, setSortDir] = useState('asc');
       const [expandedId, setExpandedId] = useState(null);
+
+      useEffect(() => {
+        document.body.classList.toggle('space-mode', cases.length === 0);
+      }, [cases.length]);
 
       useEffect(() => {
         localStorage.setItem('cq_keywords', JSON.stringify(keywords));
@@ -1734,7 +1830,7 @@ If you are unable to handle this case within the hour, please escalate it to you
 
           <div className="main-content">
             <div className="top-bar">
-              <div className="top-bar-title">{cases.length > 0 ? pageTitle : 'CaseQueue'}</div>
+              <div className="top-bar-title">{cases.length > 0 ? pageTitle : 'Sentient Case Prioritizer'}</div>
               <div className="top-bar-right">
                 {cases.length > 0 && (
                   <button className="btn-upload-new" onClick={() => { setCases([]); setSearch(''); setFilter('All'); setExpandedId(null); setViewMode('cases'); }}>

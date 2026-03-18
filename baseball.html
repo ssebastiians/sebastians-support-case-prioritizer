@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Home Run Derby</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #1a472a;
+      font-family: 'Georgia', serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      color: #fff;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-size: 2.4rem;
+      color: #FFD700;
+      text-shadow: 2px 2px 4px #000;
+      margin-bottom: 10px;
+      letter-spacing: 2px;
+    }
+
+    #scoreboard {
+      display: flex;
+      gap: 40px;
+      background: #111;
+      border: 3px solid #FFD700;
+      border-radius: 12px;
+      padding: 12px 30px;
+      margin-bottom: 16px;
+      font-size: 1.1rem;
+    }
+
+    .stat { text-align: center; }
+    .stat-label { color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+    .stat-value { color: #FFD700; font-size: 1.8rem; font-weight: bold; }
+
+    #game-area {
+      position: relative;
+      width: 700px;
+      height: 360px;
+      background: linear-gradient(to bottom, #87CEEB 0%, #87CEEB 55%, #4a7c3f 55%, #4a7c3f 100%);
+      border-radius: 16px;
+      border: 4px solid #FFD700;
+      overflow: hidden;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* Field markings */
+    #field-lines {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 50%;
+    }
+
+    /* Pitcher's mound area */
+    #mound {
+      position: absolute;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 30px;
+      height: 14px;
+      background: #c8a96e;
+      border-radius: 50%;
+    }
+
+    /* Batter's box */
+    #batter-box {
+      position: absolute;
+      right: 80px;
+      bottom: 40px;
+      width: 40px;
+      height: 60px;
+      border: 2px solid rgba(255,255,255,0.4);
+    }
+
+    /* Home plate */
+    #home-plate {
+      position: absolute;
+      right: 92px;
+      bottom: 38px;
+      width: 16px;
+      height: 16px;
+      background: white;
+      clip-path: polygon(50% 0%, 100% 38%, 100% 100%, 0% 100%, 0% 38%);
+    }
+
+    /* Batter */
+    #batter {
+      position: absolute;
+      right: 70px;
+      bottom: 38px;
+      font-size: 2.8rem;
+      transition: transform 0.1s;
+      z-index: 10;
+    }
+
+    #batter.swing { transform: rotate(-30deg) scaleX(-1); }
+
+    /* Ball */
+    #ball {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      background: white;
+      border-radius: 50%;
+      border: 2px solid #cc0000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: #cc0000;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      z-index: 5;
+      display: none;
+    }
+
+    /* Swing zone indicator */
+    #swing-zone {
+      position: absolute;
+      right: 60px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 6px;
+      height: 80px;
+      background: rgba(255, 215, 0, 0.25);
+      border: 1px dashed rgba(255, 215, 0, 0.5);
+      border-radius: 3px;
+    }
+
+    /* Hit effect */
+    #hit-effect {
+      position: absolute;
+      font-size: 2rem;
+      font-weight: bold;
+      text-shadow: 2px 2px 4px #000;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 20;
+      transition: none;
+    }
+
+    /* Pitch indicator */
+    #pitch-type {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 1rem;
+      color: #FFD700;
+      background: rgba(0,0,0,0.5);
+      padding: 4px 14px;
+      border-radius: 20px;
+      opacity: 0;
+    }
+
+    /* Speed bar */
+    #speed-bar-container {
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    #speed-label { font-size: 0.65rem; color: #FFD700; text-transform: uppercase; letter-spacing: 1px; }
+
+    #speed-bar-bg {
+      width: 10px;
+      height: 100px;
+      background: rgba(0,0,0,0.4);
+      border: 1px solid #FFD700;
+      border-radius: 5px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column-reverse;
+    }
+
+    #speed-bar-fill {
+      width: 100%;
+      background: linear-gradient(to top, #00cc44, #FFD700, #ff4444);
+      border-radius: 5px;
+      transition: height 0.3s;
+      height: 0%;
+    }
+
+    #speed-value { font-size: 0.7rem; color: #FFD700; }
+
+    /* Message area */
+    #message {
+      margin-top: 14px;
+      font-size: 1.15rem;
+      color: #FFD700;
+      text-shadow: 1px 1px 3px #000;
+      min-height: 28px;
+      text-align: center;
+    }
+
+    /* Swing button */
+    #swing-btn {
+      margin-top: 14px;
+      padding: 14px 50px;
+      font-size: 1.3rem;
+      font-family: 'Georgia', serif;
+      background: linear-gradient(135deg, #cc0000, #990000);
+      color: white;
+      border: 3px solid #FFD700;
+      border-radius: 50px;
+      cursor: pointer;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+
+    #swing-btn:hover { transform: scale(1.05); box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+    #swing-btn:active { transform: scale(0.97); }
+    #swing-btn:disabled { background: #444; border-color: #666; cursor: not-allowed; transform: none; }
+
+    #instructions {
+      margin-top: 10px;
+      font-size: 0.8rem;
+      color: rgba(255,255,255,0.55);
+    }
+
+    /* Crowd emoji row */
+    #crowd {
+      position: absolute;
+      top: 4px;
+      width: 100%;
+      text-align: center;
+      font-size: 1.1rem;
+      opacity: 0.7;
+      letter-spacing: 2px;
+    }
+
+    /* Stars overlay for HR */
+    .star {
+      position: absolute;
+      font-size: 1.5rem;
+      animation: starFly 1s ease-out forwards;
+      pointer-events: none;
+      z-index: 25;
+    }
+
+    @keyframes starFly {
+      0% { transform: scale(0) rotate(0deg); opacity: 1; }
+      100% { transform: scale(1.5) rotate(360deg) translateY(-60px); opacity: 0; }
+    }
+
+    @keyframes hitPopup {
+      0% { opacity: 0; transform: scale(0.5) translateY(0); }
+      30% { opacity: 1; transform: scale(1.2) translateY(-10px); }
+      70% { opacity: 1; transform: scale(1) translateY(-20px); }
+      100% { opacity: 0; transform: scale(0.9) translateY(-40px); }
+    }
+
+    @keyframes ballTrajectory {
+      0% { transform: scale(1); }
+      100% { transform: scale(0.3); }
+    }
+
+    #out-counter {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .out-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #FFD700;
+      background: transparent;
+      transition: background 0.2s;
+    }
+    .out-dot.active { background: #FFD700; }
+  </style>
+</head>
+<body>
+
+<h1>⚾ Home Run Derby</h1>
+
+<div id="scoreboard">
+  <div class="stat">
+    <div class="stat-label">Home Runs</div>
+    <div class="stat-value" id="hr-count">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Pitches</div>
+    <div class="stat-value" id="pitch-count">0</div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Outs</div>
+    <div id="out-counter">
+      <div class="out-dot" id="dot0"></div>
+      <div class="out-dot" id="dot1"></div>
+      <div class="out-dot" id="dot2"></div>
+    </div>
+  </div>
+  <div class="stat">
+    <div class="stat-label">Best</div>
+    <div class="stat-value" id="best-count">0</div>
+  </div>
+</div>
+
+<div id="game-area">
+  <div id="crowd">👤👤👤👤👤👤👤👤👤👤👤👤👤👤👤👤👤👤👤👤</div>
+  <div id="swing-zone"></div>
+  <div id="mound"></div>
+  <div id="batter-box"></div>
+  <div id="home-plate"></div>
+  <div id="batter">🧍</div>
+  <div id="ball">⚾</div>
+  <div id="hit-effect"></div>
+  <div id="pitch-type"></div>
+  <div id="speed-bar-container">
+    <div id="speed-label">MPH</div>
+    <div id="speed-bar-bg"><div id="speed-bar-fill"></div></div>
+    <div id="speed-value" id="mph-display">--</div>
+  </div>
+</div>
+
+<div id="message">Press SWING to start! Watch the ball and time your hit!</div>
+
+<button id="swing-btn" onclick="swing()">⚾ SWING!</button>
+<div id="instructions">Click the button or press SPACE / ENTER to swing</div>
+
+<script>
+  // Game state
+  let state = {
+    phase: 'idle', // idle, pitching, swung
+    ballX: 0,
+    ballY: 0,
+    speed: 0,
+    pitchType: '',
+    animId: null,
+    startTime: 0,
+    hr: 0,
+    pitches: 0,
+    outs: 0,
+    best: 0,
+    swungThisPitch: false,
+  };
+
+  // Zone: ball must be within X range [620, 650] (right side near batter)
+  const ZONE_LEFT = 580;
+  const ZONE_RIGHT = 640;
+  const GAME_W = 700;
+
+  const pitchTypes = [
+    { name: 'Fastball 🔥', speed: 7, curve: 0 },
+    { name: 'Changeup 💨', speed: 3.5, curve: 0 },
+    { name: 'Slider 🌀', speed: 5.5, curve: 1 },
+    { name: 'Curveball 🌊', speed: 4.5, curve: -1.5 },
+    { name: 'Four-Seamer ⚡', speed: 8, curve: 0 },
+  ];
+
+  const ballEl = document.getElementById('ball');
+  const batterEl = document.getElementById('batter');
+  const hitEl = document.getElementById('hit-effect');
+  const msgEl = document.getElementById('message');
+  const pitchTypeEl = document.getElementById('pitch-type');
+  const speedFill = document.getElementById('speed-bar-fill');
+  const speedVal = document.querySelector('#speed-bar-container #speed-value');
+  const swingBtn = document.getElementById('swing-btn');
+
+  function updateScore() {
+    document.getElementById('hr-count').textContent = state.hr;
+    document.getElementById('pitch-count').textContent = state.pitches;
+    document.getElementById('best-count').textContent = state.best;
+    for (let i = 0; i < 3; i++) {
+      document.getElementById('dot' + i).classList.toggle('active', i < state.outs);
+    }
+  }
+
+  function showPitch(pitch) {
+    pitchTypeEl.textContent = pitch.name;
+    pitchTypeEl.style.opacity = '1';
+    pitchTypeEl.style.transition = 'opacity 0.3s';
+    setTimeout(() => {
+      pitchTypeEl.style.opacity = '0';
+    }, 1200);
+  }
+
+  function showHitEffect(text, color, x, y) {
+    hitEl.textContent = text;
+    hitEl.style.color = color;
+    hitEl.style.left = x + 'px';
+    hitEl.style.top = y + 'px';
+    hitEl.style.opacity = '0';
+    hitEl.style.animation = 'none';
+    hitEl.offsetHeight; // reflow
+    hitEl.style.animation = 'hitPopup 1s ease-out forwards';
+  }
+
+  function spawnStars(cx, cy) {
+    const area = document.getElementById('game-area');
+    const icons = ['⭐', '💫', '✨', '🌟'];
+    for (let i = 0; i < 8; i++) {
+      const s = document.createElement('div');
+      s.className = 'star';
+      s.textContent = icons[Math.floor(Math.random() * icons.length)];
+      s.style.left = (cx + (Math.random() - 0.5) * 80) + 'px';
+      s.style.top = (cy + (Math.random() - 0.5) * 60) + 'px';
+      s.style.animationDelay = (Math.random() * 0.3) + 's';
+      area.appendChild(s);
+      setTimeout(() => s.remove(), 1200);
+    }
+  }
+
+  function startPitch() {
+    if (state.phase !== 'idle') return;
+
+    cancelAnimationFrame(state.animId);
+
+    const pitch = pitchTypes[Math.floor(Math.random() * pitchTypes.length)];
+    state.phase = 'pitching';
+    state.swungThisPitch = false;
+    state.speed = pitch.speed;
+    state.pitchType = pitch.name;
+    state.pitches++;
+    state.startTime = performance.now();
+
+    // Ball starts at pitcher's mound area (center-ish, mid height)
+    state.ballX = 320;
+    state.ballY = 155;
+    const targetY = 155 + pitch.curve * 30;
+
+    swingBtn.disabled = false;
+    showPitch(pitch);
+    updateScore();
+
+    // mph display
+    const mph = Math.round(60 + pitch.speed * 8);
+    speedFill.style.height = Math.min(100, (pitch.speed / 8) * 100) + '%';
+    speedVal.textContent = mph + ' mph';
+
+    msgEl.textContent = 'Ball incoming! Time your swing!';
+
+    ballEl.style.display = 'flex';
+    ballEl.style.transition = 'none';
+
+    function animate(now) {
+      if (state.phase !== 'pitching') return;
+
+      const elapsed = now - state.startTime;
+      const duration = 1400 / pitch.speed * 3.5; // ms to cross field
+      const t = elapsed / duration;
+
+      state.ballX = 320 + t * 320;
+      // curve: start straight, curve as it approaches
+      state.ballY = 155 + pitch.curve * 30 * (t * t);
+
+      ballEl.style.left = state.ballX + 'px';
+      ballEl.style.top = state.ballY + 'px';
+      ballEl.style.transform = `scale(${1 + t * 0.3})`; // grows as it approaches
+
+      if (state.ballX > GAME_W + 20) {
+        // Ball passed without swing → strike
+        if (!state.swungThisPitch) {
+          ballEl.style.display = 'none';
+          state.phase = 'idle';
+          state.outs++;
+          updateScore();
+          showHitEffect('STRIKE!', '#ff6666', 300, 100);
+          msgEl.textContent = state.outs >= 3 ? 'You struck out! Starting over...' : 'Strike! Watch the ball!';
+          if (state.outs >= 3) {
+            setTimeout(resetGame, 1500);
+          } else {
+            setTimeout(() => { state.phase = 'idle'; startPitch(); }, 1600);
+          }
+        }
+        return;
+      }
+
+      state.animId = requestAnimationFrame(animate);
+    }
+
+    state.animId = requestAnimationFrame(animate);
+  }
+
+  function swing() {
+    if (state.phase !== 'pitching' || state.swungThisPitch) return;
+    state.swungThisPitch = true;
+    state.phase = 'swung';
+    cancelAnimationFrame(state.animId);
+    swingBtn.disabled = true;
+
+    // Swing animation
+    batterEl.textContent = '🏏';
+    batterEl.classList.add('swing');
+
+    const bx = state.ballX;
+    const by = state.ballY;
+    const inZone = bx >= ZONE_LEFT && bx <= ZONE_RIGHT;
+    const centerDist = Math.abs(bx - (ZONE_LEFT + ZONE_RIGHT) / 2);
+    const perfect = centerDist < 20;
+
+    setTimeout(() => {
+      batterEl.classList.remove('swing');
+      batterEl.textContent = '🧍';
+    }, 300);
+
+    if (inZone) {
+      // Hit!
+      ballEl.style.display = 'none';
+      state.hr++;
+      if (state.hr > state.best) state.best = state.hr;
+      updateScore();
+
+      if (perfect) {
+        showHitEffect('💥 PERFECT!', '#FFD700', 220, 60);
+        spawnStars(bx, by);
+        msgEl.textContent = '🏆 PERFECT HOME RUN! You crushed it!';
+      } else {
+        showHitEffect('⚾ HOME RUN!', '#00ff88', 220, 70);
+        spawnStars(bx, by);
+        msgEl.textContent = '🎉 HOME RUN! Keep it up!';
+      }
+
+      // Crown animation: ball arcs away
+      state.phase = 'idle';
+      setTimeout(() => { state.phase = 'idle'; startPitch(); }, 1800);
+
+    } else if (bx < ZONE_LEFT) {
+      // Swung too early
+      ballEl.style.display = 'none';
+      state.outs++;
+      updateScore();
+      showHitEffect('Too Early! ⏪', '#ff9944', 200, 80);
+      msgEl.textContent = 'Swung too early! Wait for the ball!';
+
+      if (state.outs >= 3) {
+        setTimeout(resetGame, 1500);
+      } else {
+        state.phase = 'idle';
+        setTimeout(startPitch, 1700);
+      }
+    } else {
+      // Ball already past
+      ballEl.style.display = 'none';
+      state.outs++;
+      updateScore();
+      showHitEffect('Too Late! ⏩', '#ff9944', 200, 80);
+      msgEl.textContent = 'Swung too late! Be quicker!';
+
+      if (state.outs >= 3) {
+        setTimeout(resetGame, 1500);
+      } else {
+        state.phase = 'idle';
+        setTimeout(startPitch, 1700);
+      }
+    }
+  }
+
+  function resetGame() {
+    cancelAnimationFrame(state.animId);
+    state.hr = 0;
+    state.pitches = 0;
+    state.outs = 0;
+    state.phase = 'idle';
+    ballEl.style.display = 'none';
+    swingBtn.disabled = false;
+    speedFill.style.height = '0%';
+    speedVal.textContent = '--';
+    updateScore();
+    msgEl.textContent = '3 outs! Starting a new round. Press SWING!';
+    setTimeout(startPitch, 1200);
+  }
+
+  // Keyboard support
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'Enter') {
+      e.preventDefault();
+      if (state.phase === 'idle') startPitch();
+      else if (state.phase === 'pitching') swing();
+    }
+  });
+
+  // Click on game area
+  document.getElementById('game-area').addEventListener('click', () => {
+    if (state.phase === 'pitching') swing();
+  });
+
+  // Init
+  updateScore();
+  setTimeout(startPitch, 800);
+</script>
+</body>
+</html>
