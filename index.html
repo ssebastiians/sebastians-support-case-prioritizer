@@ -482,6 +482,7 @@
       padding: 2px 9px; border-radius: 10px; font-size: 11.5px; font-weight: 600;
       border: 1px solid; white-space: nowrap;
     }
+    .acct-badge-Urgent { background: #FFF0F0; color: #7F1D1D; border-color: #FCA5A5; }
     .acct-badge-High   { background: #FFFAEB; color: #92400E; border-color: #FDE68A; }
     .acct-badge-Medium { background: #EEF2FF; color: #3730A3; border-color: #C7D2FE; }
     .acct-badge-Low    { background: #F1F5F9; color: #475569; border-color: #CBD5E1; }
@@ -495,7 +496,8 @@
       transition: all 0.12s;
     }
     .seg-toggle-btn:last-child { border-right: none; }
-    .seg-toggle-btn:hover:not(.seg-active-High):not(.seg-active-Medium):not(.seg-active-Low) { background: var(--zd-bg); color: var(--zd-text); }
+    .seg-toggle-btn:hover:not(.seg-active-Urgent):not(.seg-active-High):not(.seg-active-Medium):not(.seg-active-Low) { background: var(--zd-bg); color: var(--zd-text); }
+    .seg-toggle-btn.seg-active-Urgent { background: #FFF0F0; color: #7F1D1D; font-weight: 600; }
     .seg-toggle-btn.seg-active-High   { background: #FFFAEB; color: #92400E; font-weight: 600; }
     .seg-toggle-btn.seg-active-Medium { background: #EEF2FF; color: #3730A3; font-weight: 600; }
     .seg-toggle-btn.seg-active-Low    { background: #F1F5F9; color: #475569; font-weight: 600; }
@@ -636,6 +638,7 @@
     // Combination matrix: accountRank × keywordPriority → effectivePriority
     function effectivePriority(keywordPriority, accountRank) {
       const rank = accountRank || 'Medium';
+      if (rank === 'Urgent') return 'High'; // Urgent account → always High, no exceptions
       if (keywordPriority === 'High') return 'High'; // critical always stays High
       if (keywordPriority === 'Medium') {
         if (rank === 'High') return 'High';
@@ -682,8 +685,9 @@
 
     function AccountValueBadge({ rank }) {
       const r = rank || 'Medium';
-      const icons = { High: '⭐', Medium: '◆', Low: '▽' };
-      return <span className={`acct-badge acct-badge-${r}`}>{icons[r]} {r} Value</span>;
+      const icons = { Urgent: '🚨', High: '⭐', Medium: '◆', Low: '▽' };
+      const labels = { Urgent: 'Urgent', High: 'High Value', Medium: 'Medium Value', Low: 'Low Value' };
+      return <span className={`acct-badge acct-badge-${r}`}>{icons[r]} {labels[r]}</span>;
     }
 
     function KeywordEditorModal({ keywords, onSave, onClose }) {
@@ -1436,7 +1440,7 @@ If you are unable to handle this case within the hour, please escalate it to you
       }
 
       const summaryCounts = React.useMemo(() => {
-        const counts = { High: 0, Medium: 0, Low: 0 };
+        const counts = { Urgent: 0, High: 0, Medium: 0, Low: 0 };
         accounts.forEach(name => { counts[draft[name] || 'Medium']++; });
         return counts;
       }, [draft, accounts]);
@@ -1455,10 +1459,11 @@ If you are unable to handle this case within the hour, please escalate it to you
             <div className="modal-body">
               <div className="rankings-legend">
                 <strong>How it works:</strong> Account Value × Subject Priority → Effective Priority<br/>
-                ⭐ <strong>High Value</strong> — Medium cases become High · Low cases become Medium<br/>
-                ◆ <strong>Medium Value</strong> — No change to priority<br/>
-                ▽ <strong>Low Value</strong> — Medium cases become Low · Low stays Low<br/>
-                <em>High priority cases always remain High regardless of account value.</em>
+                🚨 <strong>Urgent</strong> — Every case becomes High, regardless of all other criteria<br/>
+                ⭐ <strong>High Value</strong> — Medium cases → High · Low cases → Medium<br/>
+                ◆ <strong>Medium Value</strong> — No change (default)<br/>
+                ▽ <strong>Low Value</strong> — Medium cases → Low · Low stays Low<br/>
+                <em>High-priority keyword cases always stay High.</em>
               </div>
               {accounts.length === 0 ? (
                 <div style={{color:'var(--zd-muted)',fontSize:13,textAlign:'center',padding:'24px 0'}}>
@@ -1470,7 +1475,7 @@ If you are unable to handle this case within the hour, please escalate it to you
                   <div key={name} className="ranking-row">
                     <span className="ranking-account-name" title={name}>{name}</span>
                     <div className="seg-toggle">
-                      {['Low', 'Medium', 'High'].map(tier => (
+                      {['Low', 'Medium', 'High', 'Urgent'].map(tier => (
                         <button
                           key={tier}
                           className={`seg-toggle-btn ${current === tier ? `seg-active-${tier}` : ''}`}
@@ -1486,7 +1491,7 @@ If you are unable to handle this case within the hour, please escalate it to you
             </div>
             <div className="modal-footer" style={{justifyContent:'space-between'}}>
               <span style={{fontSize:12.5,color:'var(--zd-muted)'}}>
-                ⭐ {summaryCounts.High} High · ◆ {summaryCounts.Medium} Medium · ▽ {summaryCounts.Low} Low
+                🚨 {summaryCounts.Urgent} Urgent · ⭐ {summaryCounts.High} High · ◆ {summaryCounts.Medium} Medium · ▽ {summaryCounts.Low} Low
               </span>
               <div style={{display:'flex',gap:10}}>
                 <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
@@ -1545,9 +1550,12 @@ If you are unable to handle this case within the hour, please escalate it to you
             <div className="sidebar-rankings-summary">
               {(() => {
                 const unique = [...new Set(cases.map(c => (c.accountName||'').trim()).filter(Boolean))];
-                const counts = { High: 0, Medium: 0, Low: 0 };
+                const counts = { Urgent: 0, High: 0, Medium: 0, Low: 0 };
                 unique.forEach(name => { counts[accountRankings[name] || 'Medium']++; });
-                return <>⭐ {counts.High} High &nbsp;·&nbsp; ◆ {counts.Medium} Medium &nbsp;·&nbsp; ▽ {counts.Low} Low</>;
+                return <>
+                  {counts.Urgent > 0 && <>🚨 {counts.Urgent} Urgent &nbsp;·&nbsp; </>}
+                  ⭐ {counts.High} High &nbsp;·&nbsp; ◆ {counts.Medium} Med &nbsp;·&nbsp; ▽ {counts.Low} Low
+                </>;
               })()}
             </div>
             <button className="btn-manage-rankings" onClick={onEditRankings}>
