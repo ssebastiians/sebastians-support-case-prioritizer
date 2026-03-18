@@ -475,6 +475,67 @@
     .owner-input:focus { border-color: var(--zd-accent); }
     .owner-empty { text-align: center; padding: 24px; color: var(--zd-muted); font-size: 13px; }
     .owner-empty-icon { font-size: 28px; margin-bottom: 8px; }
+
+    /* ── Account Value Badges ── */
+    .acct-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 9px; border-radius: 10px; font-size: 11.5px; font-weight: 600;
+      border: 1px solid; white-space: nowrap;
+    }
+    .acct-badge-High   { background: #FFFAEB; color: #92400E; border-color: #FDE68A; }
+    .acct-badge-Medium { background: #EEF2FF; color: #3730A3; border-color: #C7D2FE; }
+    .acct-badge-Low    { background: #F1F5F9; color: #475569; border-color: #CBD5E1; }
+
+    /* ── Segmented Toggle ── */
+    .seg-toggle { display: inline-flex; border: 1px solid var(--zd-border); border-radius: 6px; overflow: hidden; }
+    .seg-toggle-btn {
+      padding: 5px 13px; font-size: 12.5px; font-weight: 500; cursor: pointer;
+      background: var(--zd-white); color: var(--zd-muted); border: none;
+      border-right: 1px solid var(--zd-border); font-family: var(--font);
+      transition: all 0.12s;
+    }
+    .seg-toggle-btn:last-child { border-right: none; }
+    .seg-toggle-btn:hover:not(.seg-active-High):not(.seg-active-Medium):not(.seg-active-Low) { background: var(--zd-bg); color: var(--zd-text); }
+    .seg-toggle-btn.seg-active-High   { background: #FFFAEB; color: #92400E; font-weight: 600; }
+    .seg-toggle-btn.seg-active-Medium { background: #EEF2FF; color: #3730A3; font-weight: 600; }
+    .seg-toggle-btn.seg-active-Low    { background: #F1F5F9; color: #475569; font-weight: 600; }
+
+    /* ── Sidebar Rankings Section ── */
+    .sidebar-rankings-summary {
+      font-size: 11.5px; color: rgba(255,255,255,0.45); padding: 2px 8px 10px;
+      line-height: 1.6;
+    }
+    .btn-manage-rankings {
+      width: 100%; padding: 9px 12px; border-radius: 6px; cursor: pointer;
+      background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.75);
+      border: 1px solid rgba(255,255,255,0.12); font-size: 13px; font-family: var(--font);
+      display: flex; align-items: center; gap: 8px; transition: all 0.15s; margin-bottom: 8px;
+    }
+    .btn-manage-rankings:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+    /* ── Priority Breakdown (expand row) ── */
+    .priority-breakdown {
+      display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px;
+    }
+    .priority-breakdown-sep { color: var(--zd-muted); font-size: 11px; }
+
+    /* ── Account Rankings Modal ── */
+    .ranking-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid var(--zd-border);
+    }
+    .ranking-row:last-child { border-bottom: none; }
+    .ranking-account-name {
+      font-size: 13.5px; font-weight: 500; color: var(--zd-text);
+      flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; margin-right: 14px;
+    }
+    .rankings-legend {
+      background: var(--zd-bg); border: 1px solid var(--zd-border); border-radius: 8px;
+      padding: 12px 14px; margin-bottom: 16px; font-size: 12.5px; color: var(--zd-muted);
+      line-height: 1.7;
+    }
+    .rankings-legend strong { color: var(--zd-text); }
   </style>
 </head>
 <body>
@@ -567,8 +628,31 @@
       return 'Low';
     }
 
+    // keyword-only pass — writes _basePriority, caller must follow with applyEffectivePriority
     function recalculate(cases, keywords) {
-      return cases.map(c => ({ ...c, priority: assignPriority(c._subject, keywords) }));
+      return cases.map(c => ({ ...c, _basePriority: assignPriority(c._subject, keywords) }));
+    }
+
+    // Combination matrix: accountRank × keywordPriority → effectivePriority
+    function effectivePriority(keywordPriority, accountRank) {
+      const rank = accountRank || 'Medium';
+      if (keywordPriority === 'High') return 'High'; // critical always stays High
+      if (keywordPriority === 'Medium') {
+        if (rank === 'High') return 'High';
+        if (rank === 'Low')  return 'Low';
+        return 'Medium';
+      }
+      // keywordPriority === 'Low'
+      if (rank === 'High') return 'Medium';
+      return 'Low';
+    }
+
+    // Apply effective priority to all cases using current rankings
+    function applyEffectivePriority(cases, accountRankings) {
+      return cases.map(c => ({
+        ...c,
+        priority: effectivePriority(c._basePriority, accountRankings[(c.accountName || '').trim()]),
+      }));
     }
 
     function normalizeStatus(s) {
@@ -594,6 +678,12 @@
     function StatusBadge({ status }) {
       const norm = normalizeStatus(status);
       return <span className={`status-badge status-${norm}`}>{status || '—'}</span>;
+    }
+
+    function AccountValueBadge({ rank }) {
+      const r = rank || 'Medium';
+      const icons = { High: '⭐', Medium: '◆', Low: '▽' };
+      return <span className={`acct-badge acct-badge-${r}`}>{icons[r]} {r} Value</span>;
     }
 
     function KeywordEditorModal({ keywords, onSave, onClose }) {
@@ -826,7 +916,7 @@
     // Keys shown in the main table columns (excluded from expand detail)
     const MAIN_COL_KEYS = new Set(['id', 'subject', 'priority', 'status', 'accountName', 'caseOwner', 'ageHours']);
 
-    function TicketTable({ cases, sortKey, sortDir, onSort, expandedId, onToggleExpand, owners }) {
+    function TicketTable({ cases, sortKey, sortDir, onSort, expandedId, onToggleExpand, owners, accountRankings }) {
       const columns = [
         { key: 'id',          label: 'Case #',       width: 110 },
         { key: 'subject',     label: 'Subject',       width: null },
@@ -929,15 +1019,27 @@
                         <tr className="expand-row">
                           <td colSpan={COL_COUNT}>
                             <div className="expand-row-inner">
+                              <div className="expand-field">
+                                <span className="expand-label">Priority Breakdown</span>
+                                <span className="expand-value">
+                                  <span className="priority-breakdown">
+                                    <span style={{fontSize:12,color:'var(--zd-muted)'}}>Subject:</span>
+                                    <PriorityBadge priority={c._basePriority || c.priority} />
+                                    <span className="priority-breakdown-sep">·</span>
+                                    <span style={{fontSize:12,color:'var(--zd-muted)'}}>Account:</span>
+                                    <AccountValueBadge rank={accountRankings[(c.accountName||'').trim()]} />
+                                    <span className="priority-breakdown-sep">→</span>
+                                    <span style={{fontSize:12,color:'var(--zd-muted)'}}>Effective:</span>
+                                    <PriorityBadge priority={c.priority} />
+                                  </span>
+                                </span>
+                              </div>
                               {detailFields.map(([k, v]) => (
                                 <div key={k} className="expand-field">
                                   <span className="expand-label">{FIELD_LABELS[k] || k}</span>
                                   <span className="expand-value">{String(v)}</span>
                                 </div>
                               ))}
-                              {detailFields.length === 0 && (
-                                <span style={{color:'var(--zd-muted)',fontSize:13}}>No additional fields</span>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -1118,7 +1220,7 @@ If you are unable to handle this case within the hour, please escalate it to you
     }
 
     /* ── Accounts View ── */
-    function AccountsView({ cases, owners }) {
+    function AccountsView({ cases, owners, accountRankings }) {
       const [accountFilters, setAccountFilters] = useState([]);
       const [dropdownOpen, setDropdownOpen]     = useState(false);
       const [dropdownSearch, setDropdownSearch] = useState('');
@@ -1257,6 +1359,7 @@ If you are unable to handle this case within the hour, please escalate it to you
                   >
                     <span className="account-group-icon">🏢</span>
                     <span className="account-group-name">{name}</span>
+                    <AccountValueBadge rank={accountRankings[name]} />
                     <div className="account-group-meta">
                       <div className="account-group-priority-dots">
                         {priorityCounts.High   > 0 && <span className="account-priority-dot dot-High"   title={`${priorityCounts.High} High`} />}
@@ -1319,7 +1422,83 @@ If you are unable to handle this case within the hour, please escalate it to you
       );
     }
 
-    function Sidebar({ cases, filter, onFilter, onEditKeywords, onEditOwners }) {
+    /* ── Account Rankings Modal ── */
+    function AccountRankingsModal({ cases, rankings, onSave, onClose }) {
+      const [draft, setDraft] = useState({ ...rankings });
+
+      const accounts = React.useMemo(() => {
+        const names = [...new Set(cases.map(c => (c.accountName || '').trim()).filter(Boolean))];
+        return names.sort((a, b) => a.localeCompare(b));
+      }, [cases]);
+
+      function setRank(name, tier) {
+        setDraft(d => ({ ...d, [name]: tier }));
+      }
+
+      const summaryCounts = React.useMemo(() => {
+        const counts = { High: 0, Medium: 0, Low: 0 };
+        accounts.forEach(name => { counts[draft[name] || 'Medium']++; });
+        return counts;
+      }, [draft, accounts]);
+
+      return (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+          <div className="modal-card" style={{maxWidth: 560}}>
+            <div className="modal-header">
+              <span className="modal-header-icon">⭐</span>
+              <div>
+                <div className="modal-header-title">Account Value Rankings</div>
+                <div className="modal-header-sub">Set a value tier per account — this adjusts each case's effective priority</div>
+              </div>
+              <button className="modal-close" onClick={onClose}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="rankings-legend">
+                <strong>How it works:</strong> Account Value × Subject Priority → Effective Priority<br/>
+                ⭐ <strong>High Value</strong> — Medium cases become High · Low cases become Medium<br/>
+                ◆ <strong>Medium Value</strong> — No change to priority<br/>
+                ▽ <strong>Low Value</strong> — Medium cases become Low · Low stays Low<br/>
+                <em>High priority cases always remain High regardless of account value.</em>
+              </div>
+              {accounts.length === 0 ? (
+                <div style={{color:'var(--zd-muted)',fontSize:13,textAlign:'center',padding:'24px 0'}}>
+                  No accounts found in loaded cases.
+                </div>
+              ) : accounts.map(name => {
+                const current = draft[name] || 'Medium';
+                return (
+                  <div key={name} className="ranking-row">
+                    <span className="ranking-account-name" title={name}>{name}</span>
+                    <div className="seg-toggle">
+                      {['Low', 'Medium', 'High'].map(tier => (
+                        <button
+                          key={tier}
+                          className={`seg-toggle-btn ${current === tier ? `seg-active-${tier}` : ''}`}
+                          onClick={() => setRank(name, tier)}
+                        >
+                          {tier}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="modal-footer" style={{justifyContent:'space-between'}}>
+              <span style={{fontSize:12.5,color:'var(--zd-muted)'}}>
+                ⭐ {summaryCounts.High} High · ◆ {summaryCounts.Medium} Medium · ▽ {summaryCounts.Low} Low
+              </span>
+              <div style={{display:'flex',gap:10}}>
+                <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
+                <button className="btn btn-primary" onClick={() => onSave(draft)}>Save & Recalculate</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function Sidebar({ cases, filter, onFilter, onEditKeywords, onEditOwners, accountRankings, onEditRankings }) {
       const counts = {
         All:    cases.length,
         High:   cases.filter(c => c.priority === 'High').length,
@@ -1361,6 +1540,21 @@ If you are unable to handle this case within the hour, please escalate it to you
             ))}
           </div>
 
+          <div className="sidebar-section">
+            <div className="sidebar-section-label">Account Rankings</div>
+            <div className="sidebar-rankings-summary">
+              {(() => {
+                const unique = [...new Set(cases.map(c => (c.accountName||'').trim()).filter(Boolean))];
+                const counts = { High: 0, Medium: 0, Low: 0 };
+                unique.forEach(name => { counts[accountRankings[name] || 'Medium']++; });
+                return <>⭐ {counts.High} High &nbsp;·&nbsp; ◆ {counts.Medium} Medium &nbsp;·&nbsp; ▽ {counts.Low} Low</>;
+              })()}
+            </div>
+            <button className="btn-manage-rankings" onClick={onEditRankings}>
+              <span>⭐</span> Manage Rankings
+            </button>
+          </div>
+
           <div className="sidebar-bottom">
             <button className="btn-keyword-editor" onClick={onEditOwners} style={{marginBottom:8}}>
               <span>👥</span> Case Owner Directory
@@ -1389,9 +1583,14 @@ If you are unable to handle this case within the hour, please escalate it to you
         try { const s = localStorage.getItem('cq_owners'); return s ? JSON.parse(s) : []; }
         catch { return []; }
       });
+      const [accountRankings, setAccountRankings] = useState(() => {
+        try { const s = localStorage.getItem('cq_account_rankings'); return s ? JSON.parse(s) : {}; }
+        catch { return {}; }
+      });
       const [showMapper, setShowMapper] = useState(false);
       const [showKeywordEditor, setShowKeywordEditor] = useState(false);
       const [showOwnersEditor, setShowOwnersEditor] = useState(false);
+      const [showRankingsEditor, setShowRankingsEditor] = useState(false);
       const [viewMode, setViewMode] = useState('cases'); // 'cases' | 'accounts'
       const [search, setSearch] = useState('');
       const [filter, setFilter] = useState('All');
@@ -1406,6 +1605,10 @@ If you are unable to handle this case within the hour, please escalate it to you
       useEffect(() => {
         localStorage.setItem('cq_owners', JSON.stringify(owners));
       }, [owners]);
+
+      useEffect(() => {
+        localStorage.setItem('cq_account_rankings', JSON.stringify(accountRankings));
+      }, [accountRankings]);
 
       function handleParsed(rows, fields) {
         setPendingRows(rows);
@@ -1439,7 +1642,8 @@ If you are unable to handle this case within the hour, please escalate it to you
             closed:      g('closed'),
             jiraTicket:  g('jiraTicket'),
             caseOwner:   g('caseOwner'),
-            priority:    assignPriority(subject, keywords),
+            _basePriority: assignPriority(subject, keywords),
+            priority:      effectivePriority(assignPriority(subject, keywords), accountRankings[g('accountName').trim()]),
           };
           // Keep any extra columns not mapped above for the expanded detail view
           fields.forEach(f => { if (!(f in entry)) entry[f] = row[f]; });
@@ -1458,8 +1662,14 @@ If you are unable to handle this case within the hour, please escalate it to you
 
       function handleSaveKeywords(newKws) {
         setKeywords(newKws);
-        setCases(prev => recalculate(prev, newKws));
+        setCases(prev => applyEffectivePriority(recalculate(prev, newKws), accountRankings));
         setShowKeywordEditor(false);
+      }
+
+      function handleSaveRankings(newRankings) {
+        setAccountRankings(newRankings);
+        setCases(prev => applyEffectivePriority(prev, newRankings));
+        setShowRankingsEditor(false);
       }
 
       function handleSort(key) {
@@ -1509,6 +1719,8 @@ If you are unable to handle this case within the hour, please escalate it to you
               onFilter={f => { setFilter(f); setExpandedId(null); }}
               onEditKeywords={() => setShowKeywordEditor(true)}
               onEditOwners={() => setShowOwnersEditor(true)}
+              accountRankings={accountRankings}
+              onEditRankings={() => setShowRankingsEditor(true)}
             />
           )}
 
@@ -1550,7 +1762,7 @@ If you are unable to handle this case within the hour, please escalate it to you
               {cases.length === 0 ? (
                 <UploadView onParsed={handleParsed} />
               ) : viewMode === 'accounts' ? (
-                <AccountsView cases={cases} owners={owners} />
+                <AccountsView cases={cases} owners={owners} accountRankings={accountRankings} />
               ) : (
                 <>
                   <div className="toolbar">
@@ -1586,6 +1798,7 @@ If you are unable to handle this case within the hour, please escalate it to you
                     expandedId={expandedId}
                     onToggleExpand={id => setExpandedId(prev => prev === id ? null : id)}
                     owners={owners}
+                    accountRankings={accountRankings}
                   />
                 </>
               )}
@@ -1615,6 +1828,15 @@ If you are unable to handle this case within the hour, please escalate it to you
               owners={owners}
               onSave={saved => { setOwners(saved); setShowOwnersEditor(false); }}
               onClose={() => setShowOwnersEditor(false)}
+            />
+          )}
+
+          {showRankingsEditor && (
+            <AccountRankingsModal
+              cases={cases}
+              rankings={accountRankings}
+              onSave={handleSaveRankings}
+              onClose={() => setShowRankingsEditor(false)}
             />
           )}
         </div>
