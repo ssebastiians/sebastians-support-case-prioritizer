@@ -804,7 +804,7 @@
         { key: 'createdBy',   label: 'Created By',     note: 'Who submitted the case' },
         { key: 'accountName', label: 'Account Name',   note: 'Customer or company name' },
         { key: 'caseOrigin',  label: 'Case Origin',    note: 'Email, Phone, Web, etc.' },
-        { key: 'ageHours',    label: 'Age (Hours)',    note: 'How long the case has been open' },
+        { key: 'ageHours',    label: 'Age (Days)',     note: 'How long the case has been open' },
         { key: 'open',        label: 'Open',           note: 'Open date / flag' },
         { key: 'closed',      label: 'Closed',         note: 'Closed date / flag' },
         { key: 'jiraTicket',  label: 'Jira Ticket',    note: 'Linked Jira issue key' },
@@ -1063,7 +1063,7 @@
               </div>
             </div>
             {error && <div style={{color:'#f87171',fontSize:13,textAlign:'center'}}>{error}</div>}
-            <div className="upload-hint">Recognized columns: Case Number · Status · Created By · Account Name · Subject · Case Origin · Age (Hours) · Open · Closed · Jira Ticket · Case Owner</div>
+            <div className="upload-hint">Recognized columns: Case Number · Status · Created By · Account Name · Subject · Case Origin · Age (Days) · Open · Closed · Jira Ticket · Case Owner</div>
           </div>
         </div>
       );
@@ -1073,7 +1073,7 @@
     const FIELD_LABELS = {
       id: 'Case Number', subject: 'Subject', status: 'Status',
       createdBy: 'Created By', accountName: 'Account Name', caseOrigin: 'Case Origin',
-      ageHours: 'Age (Hours)', open: 'Open', closed: 'Closed',
+      ageHours: 'Age (Days)', open: 'Open', closed: 'Closed',
       jiraTicket: 'Jira Ticket', caseOwner: 'Case Owner',
     };
 
@@ -1088,7 +1088,7 @@
         { key: 'status',      label: 'Status',        width: 100 },
         { key: 'accountName', label: 'Account Name',  width: 150 },
         { key: 'caseOwner',   label: 'Case Owner',    width: 140 },
-        { key: 'ageHours',    label: 'Age (Hrs)',     width: 90  },
+        { key: 'ageHours',    label: 'Age (Days)',    width: 90  },
         { key: '_notify',     label: 'Notify',        width: 110, noSort: true },
       ];
 
@@ -1225,7 +1225,7 @@
       const account  = c.accountName || 'N/A';
       const status   = c.status  || 'N/A';
       const priority = c.priority;
-      const age      = c.ageHours ? `${c.ageHours} hrs` : 'N/A';
+      const age      = c.ageHours ? `${c.ageHours} days` : 'N/A';
 
       const emailSubject = encodeURIComponent(
         `[Action Required] Support Case ${caseNum} — Please Respond Within 1 Hour`
@@ -1809,7 +1809,7 @@ If you are unable to handle this case within the hour, please escalate it to you
             createdBy:   g('createdBy'),
             accountName: g('accountName'),
             caseOrigin:  g('caseOrigin'),
-            ageHours:    g('ageHours'),
+            ageHours:    (() => { const v = parseFloat(g('ageHours')); return isNaN(v) ? g('ageHours') : (v / 24).toFixed(1); })(),
             open:        g('open'),
             closed:      g('closed'),
             jiraTicket:  g('jiraTicket'),
