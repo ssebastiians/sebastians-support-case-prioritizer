@@ -1961,8 +1961,9 @@ If you are unable to handle this case within the hour, please escalate it to you
                     <div className="toolbar-right">
                       <span className="result-count">{visible.length} of {cases.length} case{cases.length !== 1 ? 's' : ''}</span>
                       <button className="btn-upload-new" onClick={() => {
-                        const cols = ['caseId','subject','priority','status','accountName','caseOwner','createdAt'];
-                        const header = cols.join(',');
+                        const cols = ['id','subject','priority','status','accountName','caseOwner','ageHours'];
+                        const labels = ['Case Number','Subject','Priority','Status','Account Name','Case Owner','Age (Days)'];
+                        const header = labels.join(',');
                         const rows = visible.map(c =>
                           cols.map(k => {
                             const v = c[k] ?? '';
